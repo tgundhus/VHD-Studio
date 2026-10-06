@@ -76,7 +76,7 @@ namespace VhdAttachCommon {
         public void AddMountFolder(string folder) {
             if (string.IsNullOrEmpty(folder)) { throw new ArgumentNullException(nameof(folder)); }
             var mountPoint = folder.EndsWith("\\", StringComparison.Ordinal) ? folder : folder + "\\";
-            if (!System.IO.Directory.Exists(mountPoint)) { System.IO.Directory.CreateDirectory(mountPoint); }
+            if (!System.IO.Directory.Exists(mountPoint)) { throw new System.IO.DirectoryNotFoundException(string.Format(CultureInfo.InvariantCulture, "Mount folder \"{0}\" does not exist.", folder)); }
             if (System.IO.Directory.GetFileSystemEntries(mountPoint).Length > 0) {
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Mount folder \"{0}\" is not empty.", folder));
             }

@@ -85,7 +85,8 @@ Name: "{autoprograms}\{#AppName} Disk Manager";  Filename: "{app}\{#AppExe}";  P
 
 
 [Registry]
-Root: HKLM;  Subkey: "Software\VHD Studio";                                    ValueType: dword;   ValueName: "Installed";         ValueData: "1";              Flags: uninsdeletekey;
+; Only the marker is removed on uninstall; the auto-mount list survives so a reinstall keeps it.
+Root: HKLM;  Subkey: "Software\VHD Studio";                                    ValueType: dword;   ValueName: "Installed";         ValueData: "1";              Flags: uninsdeletevalue;
 Root: HKCU;  Subkey: "Software\Tobias Gundhus\VHD Studio";                     ValueType: none;                                                                 Flags: uninsdeletekey;
 Root: HKCU;  Subkey: "Software\Tobias Gundhus";                                ValueType: none;                                                                 Flags: uninsdeletekeyifempty;
 

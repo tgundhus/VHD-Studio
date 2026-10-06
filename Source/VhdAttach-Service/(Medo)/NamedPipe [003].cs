@@ -82,6 +82,31 @@ namespace Medo.IO {
         }
 
         /// <summary>
+        /// Creates the only instance of the pipe with the given security descriptor (SDDL), rejecting remote clients.
+        /// Fails if another process already created the pipe (prevents squatting).
+        /// </summary>
+        /// <exception cref="System.IO.IOException">Cannot create named pipe.</exception>
+        public void CreateSecure(string sddl) {
+            if (this.SafeHandle != null) { throw new InvalidOperationException("Pipe is already open."); }
+
+            var sec = new RawSecurityDescriptor(sddl);
+            byte[] secBinary = new byte[sec.BinaryLength];
+            sec.GetBinaryForm(secBinary, 0);
+            var sa = new NativeMethods.SECURITY_ATTRIBUTES();
+            sa.nLength = Marshal.SizeOf(typeof(NativeMethods.SECURITY_ATTRIBUTES));
+            sa.bInheritHandle = false;
+            sa.lpSecurityDescriptor = Marshal.AllocHGlobal(secBinary.Length);
+            try {
+                Marshal.Copy(secBinary, 0, sa.lpSecurityDescriptor, secBinary.Length);
+                this.SafeHandle = NativeMethods.CreateNamedPipe(this.FullPipeName, NativeMethods.PIPE_ACCESS_DUPLEX | NativeMethods.FILE_FLAG_FIRST_PIPE_INSTANCE, NativeMethods.PIPE_TYPE_BYTE | NativeMethods.PIPE_READMODE_BYTE | NativeMethods.PIPE_WAIT | NativeMethods.PIPE_REJECT_REMOTE_CLIENTS, 1, 4096, 4096, NativeMethods.NMPWAIT_USE_DEFAULT_WAIT, ref sa);
+            } finally {
+                Marshal.FreeHGlobal(sa.lpSecurityDescriptor);
+                sa.lpSecurityDescriptor = IntPtr.Zero;
+            }
+            if (this.SafeHandle.IsInvalid) { throw new IOException("Cannot create named pipe.", new Win32Exception()); }
+        }
+
+        /// <summary>
         /// Opens existing named pipe.
         /// </summary>
         /// <exception cref="System.InvalidOperationException">Pipe is already open.</exception>
@@ -229,6 +254,8 @@ namespace Medo.IO {
             public const uint NMPWAIT_USE_DEFAULT_WAIT = 0x00000000;
             public const uint OPEN_EXISTING = 3;
             public const uint PIPE_ACCESS_DUPLEX = 0x00000003;
+            public const uint FILE_FLAG_FIRST_PIPE_INSTANCE = 0x00080000;
+            public const uint PIPE_REJECT_REMOTE_CLIENTS = 0x00000008;
             public const uint PIPE_READMODE_BYTE = 0x00000000;
             public const uint PIPE_TYPE_BYTE = 0x00000000;
             public const uint PIPE_UNLIMITED_INSTANCES = 255;

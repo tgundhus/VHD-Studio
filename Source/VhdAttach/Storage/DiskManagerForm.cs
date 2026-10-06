@@ -26,6 +26,7 @@ namespace VhdAttach.Storage {
         private readonly ToolStripStatusLabel StatusText;
 
         private IList<DiskInfo> Disks = new List<DiskInfo>();
+        private bool IsBusy;
         private IList<PartitionInfo> Partitions = new List<PartitionInfo>();
         private readonly int? InitialDiskNumber;
 
@@ -90,6 +91,12 @@ namespace VhdAttach.Storage {
             this.Controls.Add(this.Status);
 
             this.Load += (s, e) => { split.SplitterDistance = this.ClientSize.Height / 3; this.RefreshAll(); };
+            this.FormClosing += (s, e) => {
+                if (this.IsBusy) {
+                    e.Cancel = true;
+                    Medo.MessageBox.ShowWarning(this, "A disk operation is still running. Wait for it to finish before closing.");
+                }
+            };
             this.KeyPreview = true;
             this.KeyDown += (s, e) => { if (e.KeyCode == Keys.F5) { this.RefreshAll(); e.Handled = true; } };
         }
@@ -126,6 +133,7 @@ namespace VhdAttach.Storage {
                 if (disk.IsSystem) { status.Add("System"); }
                 if (disk.IsBoot) { status.Add("Boot"); }
                 status.Add(disk.IsOffline ? "Offline" : "Online");
+                if (disk.IsProtected) { status.Add("Protected: " + disk.ProtectedReason); }
                 if (disk.IsReadOnly) { status.Add("Read-only"); }
                 var name = (disk.IsVirtual && !string.IsNullOrEmpty(disk.Location)) ? disk.Location : disk.FriendlyName;
                 var item = new ListViewItem(new[] {
@@ -172,6 +180,7 @@ namespace VhdAttach.Storage {
                         if (p.IsReadOnly) { status.Add("Read-only"); }
                         if (p.IsOffline) { status.Add("Offline"); }
                         if (!string.IsNullOrEmpty(p.HealthStatus)) { status.Add(p.HealthStatus); }
+                        if (p.IsProtected) { status.Add("Protected: " + p.ProtectedReason); }
                         this.PartitionList.Items.Add(new ListViewItem(new[] {
                             p.PartitionNumber.ToString(CultureInfo.CurrentCulture),
                             string.Join("  ", paths),
@@ -225,7 +234,8 @@ namespace VhdAttach.Storage {
             var raw = (disk != null) && (disk.PartitionStyle == PartitionStyle.Raw);
             Add("Initialize as GPT…", (s, e) => this.Initialize(PartitionStyle.Gpt), raw);
             Add("Initialize as MBR…", (s, e) => this.Initialize(PartitionStyle.Mbr), raw);
-            Add("Create partition…", (s, e) => this.CreatePartition(), !raw && (disk?.FreeSize > 1024 * 1024));
+            var create = new ToolStripMenuItem("Create partition…", null, (s, e) => this.CreatePartition()) { Enabled = this.CanModifyPartitions(disk) && !raw && (disk?.FreeSize > 1024 * 1024) };
+            items.Add(create);
             items.Add(new ToolStripSeparator());
             Add(disk?.IsOffline == true ? "Bring online" : "Take offline", (s, e) => this.Run("Online/offline", d => StorageManager.SetDiskOnline(d, d.IsOffline), disk.IsOffline ? "Online" : "Offline"));
             Add(disk?.IsReadOnly == true ? "Clear read-only" : "Set read-only", (s, e) => this.Run("Read-only", d => StorageManager.SetDiskReadOnly(d, !d.IsReadOnly), "ReadOnly", (!disk.IsReadOnly).ToString().ToLowerInvariant()));
@@ -240,7 +250,7 @@ namespace VhdAttach.Storage {
             items.Clear();
             var disk = this.SelectedDisk;
             var partition = this.SelectedPartition;
-            var editable = this.CanModify(disk, out _) && (partition != null) && !partition.IsSystem && !partition.IsBoot;
+            var editable = this.CanModifyPartitions(disk) && (partition != null) && !partition.IsProtected;
             var hasVolume = !string.IsNullOrEmpty(partition?.VolumeObjectPath);
             ToolStripMenuItem Add(string text, EventHandler handler, bool enabled = true, bool needsEdit = true) {
                 var item = new ToolStripMenuItem(text, null, handler) { Enabled = (partition != null) && enabled && (!needsEdit || editable) };
@@ -275,10 +285,19 @@ namespace VhdAttach.Storage {
 
         private bool CanModify(DiskInfo disk, out string reason) {
             reason = null;
+            if (this.IsBusy) { reason = "Another operation is running."; return false; }
             if (disk == null) { reason = "Select a disk."; return false; }
-            if (disk.IsProtected) { reason = "System and boot disks are protected."; return false; }
+            if (disk.IsProtected) { reason = "Protected: " + disk.ProtectedReason + "."; return false; }
             if (!disk.IsVirtual && !this.UnlockPhysicalButton.Checked) { reason = "Enable \"Allow changes to physical disks\" to modify this disk."; return false; }
             return true;
+        }
+
+        /// <summary>
+        /// Partitions may be changed on disks that are only protected because of another partition (e.g. one holding image files).
+        /// </summary>
+        private bool CanModifyPartitions(DiskInfo disk) {
+            if (this.IsBusy || (disk == null) || disk.IsSystemDisk) { return false; }
+            return disk.IsVirtual || this.UnlockPhysicalButton.Checked;
         }
 
         #endregion
@@ -337,7 +356,8 @@ namespace VhdAttach.Storage {
             var disk = this.SelectedDisk;
             var partition = this.SelectedPartition;
             var label = "Partition " + partition.PartitionNumber.ToString(CultureInfo.InvariantCulture);
-            using (var frm = new PromptForm("Delete partition", string.Format(CultureInfo.CurrentCulture, "{0} on {1} ({2}, {3}) and all of its data will be deleted.", label, disk, partition.Label ?? partition.Type, Ui.FormatSize(partition.Size)), StorageManager.Describe("Delete", disk, partition), destructive: true).RequireTyping(label)) {
+            var used = (partition.VolumeSize.HasValue && partition.VolumeFree.HasValue) ? Ui.FormatSize(partition.VolumeSize.Value - partition.VolumeFree.Value) + " of data" : "all of its data";
+            using (var frm = new PromptForm("Delete partition", string.Format(CultureInfo.CurrentCulture, "{0} ({1}) on {2} ({3}, {4}) and {5} will be deleted. This cannot be undone.", label, partition.DisplayName, disk, partition.Label ?? partition.Type, Ui.FormatSize(partition.Size), used), StorageManager.Describe("Delete", disk, partition), destructive: true).RequireTyping(label)) {
                 if (frm.ShowDialog(this) != DialogResult.OK) { return; }
             }
             this.Execute("Delete partition", () => StorageManager.DeletePartition(disk, partition));
@@ -427,29 +447,46 @@ namespace VhdAttach.Storage {
         }
 
         private bool Confirm(string title, string message, string command) {
-            using (var frm = new PromptForm(title, message, command)) {
+            var disk = this.SelectedDisk;
+            var physical = (disk != null) && !disk.IsVirtual;
+            if (physical) { message = "⚠ PHYSICAL DISK: " + (disk.FriendlyName ?? "") + " " + (disk.SerialNumber ?? "") + "\n\n" + message; }
+            using (var frm = new PromptForm(title, message, command, destructive: physical)) {
+                if (physical) { frm.RequireTyping(disk.ToString()); }
                 return frm.ShowDialog(this) == DialogResult.OK;
             }
         }
 
         private async void Execute(string title, Action action) {
+            if (this.IsBusy) { return; }
             if (!Ui.IsElevated) {
                 if (Medo.MessageBox.ShowQuestion(this, "Changing disks requires administrator rights.\n\nRestart Disk Manager as administrator?", MessageBoxButtons.YesNo) == DialogResult.Yes) {
                     this.Elevate_Click(null, null);
                 }
                 return;
             }
+            var disk = this.SelectedDisk;
+            var partition = this.SelectedPartition;
+            var target = (disk == null) ? "" : string.Format(CultureInfo.InvariantCulture, "Disk {0} [{1}]{2}", disk.Number, disk.IsVirtual ? disk.Location : (disk.FriendlyName + " " + disk.SerialNumber), (partition != null) ? " partition " + partition.PartitionNumber.ToString(CultureInfo.InvariantCulture) : "");
+            this.IsBusy = true;
             this.UseWaitCursor = true;
             this.Tools.Enabled = false;
+            this.DiskList.Enabled = false;
+            this.PartitionList.Enabled = false;
             this.SetStatus(title + "…", false);
             try {
+                VhdAttachCommon.AuditLog.Started("Disk Manager: " + title, target);
                 await Task.Run(action);
+                VhdAttachCommon.AuditLog.Succeeded("Disk Manager: " + title, target);
                 if (this.StatusText.Text == title + "…") { this.SetStatus(title + " completed.", false); } //keep messages set by the action (e.g. scan results)
             } catch (Exception ex) {
+                VhdAttachCommon.AuditLog.Failed("Disk Manager: " + title, target, ex);
                 this.ShowError(title, ex);
             } finally {
+                this.IsBusy = false;
                 this.UseWaitCursor = false;
                 this.Tools.Enabled = true;
+                this.DiskList.Enabled = true;
+                this.PartitionList.Enabled = true;
                 this.RefreshAll();
             }
         }

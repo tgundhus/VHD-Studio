@@ -20,13 +20,20 @@ namespace VhdAttach.Storage {
         public bool IsBoot { get; set; }
         public bool IsOffline { get; set; }
         public bool IsReadOnly { get; set; }
+        public bool IsClustered { get; set; }
         public string SerialNumber { get; set; }
         public string ObjectPath { get; set; }
 
         /// <summary>
-        /// System, boot and page-file disks are never modified.
+        /// Why the disk as a whole must not be changed (system/boot/cluster disk, or a partition on it is protected); null if it may.
         /// </summary>
-        public bool IsProtected => this.IsSystem || this.IsBoot;
+        public string ProtectedReason { get; set; }
+        public bool IsProtected => this.ProtectedReason != null;
+
+        /// <summary>
+        /// Hard protection that also blocks changes to individual partitions.
+        /// </summary>
+        public bool IsSystemDisk => this.IsSystem || this.IsBoot || this.IsClustered;
         public long FreeSize => Math.Max(0, this.Size - this.AllocatedSize);
         public override string ToString() => string.Format(CultureInfo.CurrentCulture, "Disk {0}", this.Number);
     }
@@ -53,6 +60,14 @@ namespace VhdAttach.Storage {
         public long? VolumeFree { get; set; }
         public string HealthStatus { get; set; }
         public string VolumeObjectPath { get; set; }
+
+        /// <summary>
+        /// Why the partition must not be changed (Windows, page file, images of attached virtual disks); null if it may.
+        /// </summary>
+        public string ProtectedReason { get; set; }
+        public bool IsProtected => this.ProtectedReason != null;
+        public string VolumeGuidPath => this.AccessPaths.FirstOrDefault(p => p.StartsWith(@"\\?\Volume{", StringComparison.OrdinalIgnoreCase));
+        public string DisplayName => this.DriveLetter.HasValue ? this.DriveLetter.Value + ":" : (this.MountFolders.FirstOrDefault() ?? ("partition " + this.PartitionNumber.ToString(CultureInfo.CurrentCulture)));
 
         public IEnumerable<string> MountFolders => this.AccessPaths.Where(p => !p.StartsWith(@"\\?\", StringComparison.Ordinal) && !((p.Length == 3) && (p[1] == ':')));
         public override string ToString() => string.Format(CultureInfo.CurrentCulture, "Partition {0}", this.PartitionNumber);
@@ -93,6 +108,7 @@ namespace VhdAttach.Storage {
                             IsBoot = (bool)(mo["IsBoot"] ?? false),
                             IsOffline = (bool)(mo["IsOffline"] ?? false),
                             IsReadOnly = (bool)(mo["IsReadOnly"] ?? false),
+                            IsClustered = (bool)(mo["IsClustered"] ?? false),
                             SerialNumber = (mo["SerialNumber"] as string)?.Trim(),
                             ObjectPath = mo.Path.Path,
                         });
@@ -100,10 +116,27 @@ namespace VhdAttach.Storage {
                 }
             }
             list.Sort((a, b) => a.Number.CompareTo(b.Number));
+            foreach (var disk in list) {
+                if (disk.IsSystem) { disk.ProtectedReason = "it holds the Windows system partition"; }
+                else if (disk.IsBoot) { disk.ProtectedReason = "it holds the running Windows installation"; }
+                else if (disk.IsClustered) { disk.ProtectedReason = "it is a cluster disk"; }
+                else if (disk.PartitionStyle != PartitionStyle.Raw) {
+                    try {
+                        var partition = GetPartitions(disk.Number, list).FirstOrDefault(p => p.IsProtected);
+                        if (partition != null) { disk.ProtectedReason = partition.DisplayName + " is protected: " + partition.ProtectedReason; }
+                    } catch (ManagementException) {
+                        disk.ProtectedReason = "its partitions could not be read";
+                    }
+                }
+            }
             return list;
         }
 
         public static IList<PartitionInfo> GetPartitions(int diskNumber) {
+            return GetPartitions(diskNumber, null);
+        }
+
+        private static IList<PartitionInfo> GetPartitions(int diskNumber, IList<DiskInfo> knownDisks) {
             var list = new List<PartitionInfo>();
             var scope = GetScope();
             var query = new ObjectQuery("SELECT * FROM MSFT_Partition WHERE DiskNumber = " + diskNumber.ToString(CultureInfo.InvariantCulture));
@@ -145,7 +178,78 @@ namespace VhdAttach.Storage {
                 }
             }
             list.Sort((a, b) => a.Offset.CompareTo(b.Offset));
+
+            //protect partitions Windows depends on, and those holding image files of attached virtual disks
+            var pageFiles = GetPageFiles();
+            var images = GetAttachedImageFiles(knownDisks);
+            foreach (var p in list) {
+                var roots = p.AccessPaths.Select(a => a.EndsWith("\\", StringComparison.Ordinal) ? a : a + "\\").ToList();
+                if (p.IsSystem) { p.ProtectedReason = "Windows system (EFI) partition"; }
+                else if (p.IsBoot) { p.ProtectedReason = "running Windows installation"; }
+                else if (p.Type.StartsWith("LDM", StringComparison.Ordinal) || (p.Type == "Storage Spaces") || (p.Type == "MBR 0x42")) { p.ProtectedReason = "member of a dynamic disk or storage pool (its volume can span other disks); use Disk Management or Storage Spaces"; }
+                else if (pageFiles.Any(f => roots.Any(r => f.StartsWith(r, StringComparison.OrdinalIgnoreCase)))) { p.ProtectedReason = "holds a page file"; }
+                else {
+                    var image = images.FirstOrDefault(i => roots.Any(r => i.Value.StartsWith(r, StringComparison.OrdinalIgnoreCase)));
+                    if (image.Value != null) { p.ProtectedReason = string.Format(CultureInfo.CurrentCulture, "holds the image file of attached virtual disk {0}", image.Key); }
+                }
+            }
             return list;
+        }
+
+        private static IList<string> GetPageFiles() {
+            var list = new List<string>();
+            try {
+                using (var searcher = new ManagementObjectSearcher(@"root\cimv2", "SELECT Name FROM Win32_PageFileUsage")) {
+                    foreach (ManagementObject mo in searcher.Get()) {
+                        using (mo) { if (mo["Name"] is string name) { list.Add(name); } }
+                    }
+                }
+            } catch (ManagementException) { }
+            return list;
+        }
+
+        private static IList<KeyValuePair<int, string>> GetAttachedImageFiles(IList<DiskInfo> knownDisks) {
+            var disks = knownDisks;
+            if (disks == null) {
+                disks = new List<DiskInfo>();
+                using (var searcher = new ManagementObjectSearcher(GetScope(), new ObjectQuery("SELECT Number, BusType, Location FROM MSFT_Disk"))) {
+                    foreach (ManagementObject mo in searcher.Get()) {
+                        using (mo) {
+                            disks.Add(new DiskInfo { Number = Convert.ToInt32(mo["Number"], CultureInfo.InvariantCulture), IsVirtual = Convert.ToInt32(mo["BusType"] ?? 0, CultureInfo.InvariantCulture) == BusTypeFileBackedVirtual, Location = mo["Location"] as string });
+                        }
+                    }
+                }
+            }
+            return disks.Where(d => d.IsVirtual && !string.IsNullOrEmpty(d.Location)).Select(d => new KeyValuePair<int, string>(d.Number, d.Location)).ToList();
+        }
+
+        /// <summary>
+        /// Re-reads the disk right before a change and verifies it is still the one the user confirmed.
+        /// </summary>
+        public static DiskInfo Revalidate(DiskInfo confirmed) {
+            var fresh = GetDisks().FirstOrDefault(d => d.ObjectPath == confirmed.ObjectPath);
+            if ((fresh == null) || (fresh.Number != confirmed.Number) || (fresh.Size != confirmed.Size) || (fresh.IsVirtual != confirmed.IsVirtual)
+                || !string.Equals(fresh.Location, confirmed.Location, StringComparison.OrdinalIgnoreCase) || !string.Equals(fresh.SerialNumber, confirmed.SerialNumber, StringComparison.Ordinal)) {
+                throw new InvalidOperationException("The disk changed since the list was loaded (it may have been detached, replaced or renumbered). Nothing was changed. Refresh and try again.");
+            }
+            return fresh;
+        }
+
+        public static PartitionInfo Revalidate(DiskInfo disk, PartitionInfo confirmed) {
+            var fresh = GetPartitions(disk.Number).FirstOrDefault(p => p.ObjectPath == confirmed.ObjectPath);
+            if ((fresh == null) || (fresh.PartitionNumber != confirmed.PartitionNumber) || (fresh.Offset != confirmed.Offset) || (fresh.Size != confirmed.Size)) {
+                throw new InvalidOperationException("The partition changed since the list was loaded. Nothing was changed. Refresh and try again.");
+            }
+            return fresh;
+        }
+
+        /// <summary>
+        /// Refuses when files are open on any of the volumes (they would be cut off and lose unsaved data).
+        /// </summary>
+        public static void EnsureNotInUse(IEnumerable<PartitionInfo> partitions) {
+            var withVolumes = partitions.Where(p => p.VolumeGuidPath != null).ToList();
+            var inUse = VhdAttachCommon.VolumeLock.FindInUse(withVolumes.Select(p => p.VolumeGuidPath).ToList(), withVolumes.Select(p => p.DisplayName).ToList());
+            if (inUse.Count > 0) { throw new VhdAttachCommon.VolumeInUseException(inUse); }
         }
 
         /// <summary>
@@ -162,12 +266,16 @@ namespace VhdAttach.Storage {
         #region Disk operations
 
         public static void InitializeDisk(DiskInfo disk, PartitionStyle style) {
+            disk = Revalidate(disk);
             EnsureModifiable(disk);
+            if (disk.PartitionStyle != PartitionStyle.Raw) { throw new InvalidOperationException("The disk is already initialized."); }
             Invoke(disk.ObjectPath, "Initialize", p => p["PartitionStyle"] = (ushort)style);
         }
 
         public static void ConvertStyle(DiskInfo disk, PartitionStyle style) {
+            disk = Revalidate(disk);
             EnsureModifiable(disk);
+            if (GetPartitions(disk.Number).Count > 0) { throw new InvalidOperationException("Partition style can only be converted on an empty disk."); }
             Invoke(disk.ObjectPath, "ConvertStyle", p => p["PartitionStyle"] = (ushort)style);
         }
 
@@ -175,17 +283,23 @@ namespace VhdAttach.Storage {
         /// Removes all partitions and data (diskpart "clean").
         /// </summary>
         public static void CleanDisk(DiskInfo disk) {
+            disk = Revalidate(disk);
             EnsureModifiable(disk);
+            EnsureNotInUse(GetPartitions(disk.Number));
             Invoke(disk.ObjectPath, "Clear", p => { p["RemoveData"] = true; p["RemoveOEM"] = true; p["ZeroOutEntireDisk"] = false; });
         }
 
         public static void SetDiskOnline(DiskInfo disk, bool online) {
+            disk = Revalidate(disk);
             EnsureModifiable(disk);
+            if (!online) { EnsureNotInUse(GetPartitions(disk.Number)); }
             Invoke(disk.ObjectPath, online ? "Online" : "Offline", null);
         }
 
         public static void SetDiskReadOnly(DiskInfo disk, bool readOnly) {
+            disk = Revalidate(disk);
             EnsureModifiable(disk);
+            if (readOnly) { EnsureNotInUse(GetPartitions(disk.Number)); }
             Invoke(disk.ObjectPath, "SetAttributes", p => p["IsReadOnly"] = readOnly);
         }
 
@@ -194,7 +308,9 @@ namespace VhdAttach.Storage {
         /// </summary>
         /// <param name="size">Size in bytes or 0 for all available space.</param>
         public static void CreatePartition(DiskInfo disk, long size, bool assignDriveLetter, string fileSystem, string label) {
-            EnsureModifiable(disk);
+            disk = Revalidate(disk);
+            EnsureModifiable(disk, null, creatingPartition: true);
+            if ((size > 0) && (size > disk.FreeSize)) { throw new InvalidOperationException("There is not enough unallocated space for a partition of this size."); }
             var result = Invoke(disk.ObjectPath, "CreatePartition", p => {
                 if (size <= 0) { p["UseMaximumSize"] = true; } else { p["Size"] = (ulong)size; }
                 p["AssignDriveLetter"] = assignDriveLetter;
@@ -212,28 +328,40 @@ namespace VhdAttach.Storage {
         #region Partition operations
 
         public static void DeletePartition(DiskInfo disk, PartitionInfo partition) {
+            disk = Revalidate(disk);
+            partition = Revalidate(disk, partition);
             EnsureModifiable(disk, partition);
+            EnsureNotInUse(new[] { partition });
             Invoke(partition.ObjectPath, "DeleteObject", null);
         }
 
         public static void ResizePartition(DiskInfo disk, PartitionInfo partition, long newSize) {
+            disk = Revalidate(disk);
+            partition = Revalidate(disk, partition);
             EnsureModifiable(disk, partition);
+            var (min, max) = GetSupportedSize(partition);
+            if ((newSize < min) || (newSize > max)) { throw new InvalidOperationException("The requested size is outside the supported range; nothing was changed."); }
             Invoke(partition.ObjectPath, "Resize", p => p["Size"] = (ulong)newSize);
         }
 
         public static void FormatPartition(DiskInfo disk, PartitionInfo partition, string fileSystem, string label, bool quick) {
+            disk = Revalidate(disk);
+            partition = Revalidate(disk, partition);
             EnsureModifiable(disk, partition);
+            EnsureNotInUse(new[] { partition });
             var volumePath = partition.VolumeObjectPath ?? GetVolumePath(partition);
             if (volumePath == null) { throw new InvalidOperationException("Partition has no volume that can be formatted."); }
             Invoke(volumePath, "Format", p => {
                 p["FileSystem"] = fileSystem;
                 p["FileSystemLabel"] = label ?? "";
                 p["Full"] = !quick;
-                p["Force"] = true;
+                p["Force"] = false; //never dismount a volume with open files
             });
         }
 
         public static void AddAccessPath(DiskInfo disk, PartitionInfo partition, string accessPath) {
+            disk = Revalidate(disk);
+            partition = Revalidate(disk, partition);
             EnsureModifiable(disk, partition);
             Invoke(partition.ObjectPath, "AddAccessPath", p => {
                 if (string.IsNullOrEmpty(accessPath)) { p["AssignDriveLetter"] = true; } else { p["AccessPath"] = accessPath; }
@@ -241,11 +369,15 @@ namespace VhdAttach.Storage {
         }
 
         public static void RemoveAccessPath(DiskInfo disk, PartitionInfo partition, string accessPath) {
+            disk = Revalidate(disk);
+            partition = Revalidate(disk, partition);
             EnsureModifiable(disk, partition);
             Invoke(partition.ObjectPath, "RemoveAccessPath", p => p["AccessPath"] = accessPath);
         }
 
         public static void SetPartitionAttributes(DiskInfo disk, PartitionInfo partition, bool? isActive = null, bool? isHidden = null, bool? isReadOnly = null, bool? noDefaultDriveLetter = null) {
+            disk = Revalidate(disk);
+            partition = Revalidate(disk, partition);
             EnsureModifiable(disk, partition);
             Invoke(partition.ObjectPath, "SetAttributes", p => {
                 if (isActive.HasValue) { p["IsActive"] = isActive.Value; }
@@ -319,12 +451,15 @@ namespace VhdAttach.Storage {
 
         #region Helpers
 
-        private static void EnsureModifiable(DiskInfo disk, PartitionInfo partition = null) {
-            if (disk.IsProtected) {
-                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, "Disk {0} holds the running Windows installation (system/boot disk) and cannot be modified here.", disk.Number));
+        /// <summary>
+        /// Disk-wide changes need an unprotected disk; partition changes need an unprotected partition on a non-system disk.
+        /// </summary>
+        private static void EnsureModifiable(DiskInfo disk, PartitionInfo partition = null, bool creatingPartition = false) {
+            if (disk.IsSystemDisk || ((partition == null) && !creatingPartition && disk.IsProtected)) {
+                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, "Disk {0} cannot be changed here because {1}.", disk.Number, disk.ProtectedReason));
             }
-            if ((partition != null) && (partition.IsSystem || partition.IsBoot)) {
-                throw new InvalidOperationException("This partition is in use by the running Windows installation and cannot be modified here.");
+            if ((partition != null) && partition.IsProtected) {
+                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, "{0} cannot be changed here: {1}.", partition.DisplayName, partition.ProtectedReason));
             }
         }
 

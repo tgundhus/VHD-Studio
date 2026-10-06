@@ -23,9 +23,13 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
-      - name: Test, publish and build installer
+      - name: Test (including elevated data-safety suite), publish and build installer
         shell: pwsh
-        run: ./Setup/Publish.ps1
+        run: ./Setup/Publish.ps1   # hosted runners are elevated, so the Elevated tests run on real virtual disks
+
+      - name: Data-safety suite must run elevated (an all-skipped run fails)
+        shell: pwsh
+        run: dotnet test Source/VhdAttach-Test/VhdAttach-Test.csproj -c Release -- --filter "TestCategory=Elevated"
 
       - uses: actions/upload-artifact@v4
         with:

@@ -1095,9 +1095,10 @@ namespace Medo.IO {
             [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
             public struct ATTACH_VIRTUAL_DISK_PARAMETERS_Version1 {
                 /// <summary>
-                /// Reserved.
+                /// Reserved (ULONG), widened so the union is 8-byte aligned and the structure is the native 24 bytes.
                 /// </summary>
-                public Int32 Reserved; //ULONG
+                public Int64 Reserved;
+                public Int64 Reserved2; //Version2 RestrictedLength
             }
 
             /// <summary>

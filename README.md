@@ -31,11 +31,15 @@ Disk Management.
 ### Attach & auto-mount
 * Attach / detach from Explorer's context menu (VHD, VHDX, ISO), read-only if you like.
 * **Auto-mount at startup** through a small Windows service: read-only, no drive letter, or
-  **mounted into an empty folder** instead of a drive letter.
+  **mounted into an empty folder** instead of a drive letter (folder mounts require an administrator).
 * Users without admin rights can attach disks, because the service does the privileged work.
   The service checks the user's own permissions first, so nobody can attach a file they couldn't open themselves.
-* **Automatic VHDX log replay.** A VHDX that wasn't closed cleanly (crash, power loss) normally fails
-  with a confusing *"Access denied"*. VHD Studio detects the pending log and replays it first.
+* **VHDX log replay.** A VHDX that wasn't closed cleanly (crash, power loss) normally fails with a
+  confusing *"Access denied"*. VHD Studio detects the pending log and replays it for a normal attach.
+  A read-only attach never writes to the file; it explains the problem and points you to
+  Repair → Replay log, which takes a backup first.
+* **Safe detach.** Volumes are flushed and locked before a disk is detached. If files are still open,
+  you get the choice to retry instead of losing unsaved data.
 * Mapped network drives are translated to UNC paths so the service can reach them.
 
 ### Maintenance (no Hyper-V required)
@@ -52,7 +56,10 @@ Disk Management.
 | **Repair** | Replay the VHDX log, fix a broken parent path (`Set-VHD -ParentPath` equivalent), or reset a duplicate disk identifier. |
 | **Details** | Type, virtual / on-disk size, fragmentation, sector sizes, smallest safe size, parent chain. |
 
-Long operations show progress and can be cancelled.
+Every operation that changes an existing file first shows exactly what will change and makes a
+**SHA-256-verified backup** (enabled by default when there is room). It refuses disks that are attached
+or in use, and checks the result afterwards. Long operations show progress, and those that are
+safe to interrupt can be cancelled.
 
 ### Disk Manager (DiskPart GUI)
 
@@ -71,6 +78,15 @@ Long operations show progress and can be cancelled.
   * Every change shows the **equivalent PowerShell command** before it runs.
 
 Disk Manager is available from the toolbar (`Ctrl+D`), the Start menu, or `VhdStudio.exe /DiskManager`.
+
+
+## Data safety
+
+VHD Studio is built so that you don't lose data by accident. It never replaces existing files, makes
+verified backups before in-place changes, protects system, boot, page-file and image-hosting disks,
+re-checks every disk before changing it, refuses to touch volumes with open files, and logs every
+change to `%ProgramData%\VHD Studio\Logs`. The full model is in [docs/SAFETY.md](docs/SAFETY.md).
+An end-to-end test suite verifies the data on real virtual disks byte for byte after every operation.
 
 
 ## Installation

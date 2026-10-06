@@ -9,14 +9,14 @@ namespace VhdAttachCommon {
 
     /// <summary>
     /// Append-only record of every change VHD Studio makes to disks and images
-    /// (%ProgramData%\VHD Studio\Logs\audit-yyyy-MM.log, one JSON object per line).
+    /// (%ProgramData%\xGND Software\VHD Studio\Logs\audit-yyyy-MM.log, one JSON object per line).
     /// Logging never blocks or fails the operation itself.
     /// </summary>
     internal static class AuditLog {
 
         private static readonly object SyncRoot = new object();
 
-        public static string Directory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "VHD Studio", "Logs");
+        public static string Directory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "xGND Software", "VHD Studio", "Logs");
 
         public static void Started(string operation, string target, string details = null, string user = null) {
             Write("started", operation, target, details, user);
@@ -61,8 +61,9 @@ namespace VhdAttachCommon {
         /// must not be redirected into files chosen by another user.
         /// </summary>
         private static bool EnsureSecureDirectory() {
-            var parent = Path.GetDirectoryName(Directory);
-            foreach (var path in new[] { parent, Directory }) {
+            var product = Path.GetDirectoryName(Directory);
+            var vendor = Path.GetDirectoryName(product);
+            foreach (var path in new[] { vendor, product, Directory }) {
                 var info = new DirectoryInfo(path);
                 if (!info.Exists) {
                     var security = new System.Security.AccessControl.DirectorySecurity();

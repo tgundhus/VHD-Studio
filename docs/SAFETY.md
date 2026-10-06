@@ -63,7 +63,7 @@ and change-approval boards.
 The log folder is created by the service at start-up with an Administrators/SYSTEM-only ACL. A folder
 that is a link, or one pre-created by another user, is never written to.
 
-`%ProgramData%\VHD Studio\Logs\audit-YYYY-MM.log` holds one JSON object per line with the time,
+`%ProgramData%\xGND Software\VHD Studio\Logs\audit-YYYY-MM.log` holds one JSON object per line with the time,
 result (`started`/`succeeded`/`failed`), operation, target, details, user, machine and process.
 The service records attach, detach and auto-mount changes on behalf of the calling user.
 Maintenance and Disk Manager record their own actions, and these always run elevated.

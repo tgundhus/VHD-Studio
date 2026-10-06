@@ -91,7 +91,8 @@ Name: "{autoprograms}\{#AppName} Disk Manager";  Filename: "{app}\{#AppExe}";  P
 
 [Registry]
 ; Only the marker is removed on uninstall; the auto-mount list survives so a reinstall keeps it.
-Root: HKLM;  Subkey: "Software\VHD Studio";                                    ValueType: dword;   ValueName: "Installed";         ValueData: "1";              Flags: uninsdeletevalue;
+Root: HKLM;  Subkey: "Software\xGND Software\VHD Studio";                      ValueType: dword;   ValueName: "Installed";         ValueData: "1";              Flags: uninsdeletevalue;
+Root: HKLM;  Subkey: "Software\xGND Software";                                 ValueType: none;                                                                 Flags: uninsdeletekeyifempty;
 
 ; Make the built-in Windows.VhdFile/Windows.IsoFile handlers own the extensions so the verbs below show up.
 Root: HKCR;  Subkey: ".vhd";                                                   ValueType: none;    ValueName: "";                  Flags: deletevalue;                                                     Tasks: context_vhd_open context_vhd_attach context_vhd_attachreadonly context_vhd_detach context_vhd_maintain;
@@ -242,9 +243,9 @@ begin
   Exec(ExpandConstant('{app}\{#ServiceExe}'), '/Uninstall', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
   { Carry over the VHD Attach 4.x auto-mount list; its uninstaller deletes the old key. }
-  if not RegValueExists(HKLM64, 'Software\VHD Studio', 'AutoAttachVhdList') then begin
+  if not RegValueExists(HKLM64, 'Software\xGND Software\VHD Studio', 'AutoAttachVhdList') then begin
     if RegQueryMultiStringValue(HKLM64, 'Software\Josip Medved\VHD Attach', 'AutoAttachVhdList', AutoAttach) or RegQueryMultiStringValue(HKLM32, 'Software\Josip Medved\VHD Attach', 'AutoAttachVhdList', AutoAttach) then
-      RegWriteMultiStringValue(HKLM64, 'Software\VHD Studio', 'AutoAttachVhdList', AutoAttach);
+      RegWriteMultiStringValue(HKLM64, 'Software\xGND Software\VHD Studio', 'AutoAttachVhdList', AutoAttach);
   end;
 
   { Remove VHD Attach 4.x (same features, older identity). }

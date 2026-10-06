@@ -6,7 +6,8 @@ namespace VhdAttachCommon {
     internal static class Branding {
 
         public const string ProductName = "VHD Studio";
-        public const string Publisher = "Tobias Gundhus";
+        public const string Publisher = "xGND Software";
+        public const string Author = "Tobias Gundhus";
 
         public const string ApplicationExe = "VhdStudio.exe";
         public const string ServiceExe = "VhdStudioService.exe";
@@ -17,7 +18,7 @@ namespace VhdAttachCommon {
         public const string PipeName = "VhdStudio-Commands";
         public const string PacketProduct = "VhdStudio";
 
-        public const string SettingsSubkeyPath = @"Software\VHD Studio";
+        public const string SettingsSubkeyPath = @"Software\xGND Software\VHD Studio"; //HKCU settings use the same path (AssemblyCompany\Product)
         public const string LegacySettingsSubkeyPath = @"Software\Josip Medved\VHD Attach";
 
         public const string ProjectUrl = "https://github.com/tgundhus/VhdAttach";

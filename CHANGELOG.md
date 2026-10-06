@@ -2,7 +2,8 @@
 
 ## 5.0.0: VHD Studio
 
-First release under the VHD Studio name. It continues VHD Attach 4.22 by Josip Medved
+First release under the VHD Studio name, by Tobias Gundhus (xGND Software). It continues
+VHD Attach 1.0–4.22, created and maintained 2009–2020 by Josip Medved
 ([@medo64](https://github.com/medo64/VhdAttach)).
 
 ### New
@@ -46,7 +47,7 @@ First release under the VHD Studio name. It continues VHD Attach 4.22 by Josip M
   it created.
 - Fixing a parent path verifies the parent and restores the previous path on a mismatch.
 - Differencing disks mark their parent read-only. A merged child goes to the Recycle Bin.
-- Audit log of every change in `%ProgramData%\VHD Studio\Logs`.
+- Audit log of every change in `%ProgramData%\xGND Software\VHD Studio\Logs`.
 - End-to-end data-safety test suite on real virtual disks (`Setup\Test-DataSafety.ps1`, runs in CI).
 
 ### Security
@@ -61,6 +62,7 @@ First release under the VHD Studio name. It continues VHD Attach 4.22 by Josip M
 
 ### Changed
 - Runtime moved from .NET Framework 4.0 to **.NET 10**. Minimum OS is Windows 10 1809 (x64).
-- New name, icon and look. Update checks and bug reports go to this project's GitHub page.
+- New name, icon and look; published by xGND Software. Settings live under `Software\xGND Software\VHD Studio`.
+  Update checks and bug reports go to this project's GitHub page.
 - Setup removes VHD Attach 4.x and keeps its auto-mount list.
 - The build uses `dotnet` and GitHub Actions instead of Visual Studio 2019 batch scripts.

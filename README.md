@@ -19,11 +19,13 @@ DiskPart-style **Disk Manager**. Together they cover the jobs that otherwise nee
 the Hyper-V PowerShell module (missing on Windows Home), `diskpart` scripts or
 Disk Management.
 
-> **Credits:** VHD Studio is a fork of **[VHD Attach](https://github.com/medo64/VhdAttach)**
-> by **Josip Medved ([@medo64](https://github.com/medo64))**, who built and maintained it
-> from 2009 onward. The attach/detach engine, auto-mount service and much of the code are his
-> work, released under the MIT license. Thank you, Josip! For the classic tool, visit
-> [medo64.com/vhdattach](https://www.medo64.com/vhdattach/).
+VHD Studio is developed by **Tobias Gundhus ([xGND Software](https://github.com/tgundhus))**.
+
+> **Credits:** VHD Studio is based on **[VHD Attach](https://github.com/medo64/VhdAttach)** by
+> **Josip Medved ([@medo64](https://github.com/medo64))**, who created it and maintained versions
+> 1.0 to 4.22 from 2009 to 2020. The attach/detach engine, auto-mount service and much of the
+> code are his work, released under the MIT license. Thank you, Josip! For the classic tool,
+> visit [medo64.com/vhdattach](https://www.medo64.com/vhdattach/).
 
 
 ## Features
@@ -85,7 +87,7 @@ Disk Manager is available from the toolbar (`Ctrl+D`), the Start menu, or `VhdSt
 VHD Studio is built so that you don't lose data by accident. It never replaces existing files, makes
 verified backups before in-place changes, protects system, boot, page-file and image-hosting disks,
 re-checks every disk before changing it, refuses to touch volumes with open files, and logs every
-change to `%ProgramData%\VHD Studio\Logs`. The full model is in [docs/SAFETY.md](docs/SAFETY.md).
+change to `%ProgramData%\xGND Software\VHD Studio\Logs`. The full model is in [docs/SAFETY.md](docs/SAFETY.md).
 An end-to-end test suite verifies the data on real virtual disks byte for byte after every operation.
 
 
@@ -148,4 +150,4 @@ Bug reports and ideas are welcome in [Issues](https://github.com/tgundhus/VhdAtt
 
 ## License
 
-[MIT](LICENSE.md). Original work © 2009 Josip Medved, modifications © 2026 Tobias Gundhus.
+[MIT](LICENSE.md). VHD Studio © 2026 Tobias Gundhus, xGND Software. Based on VHD Attach © 2009-2020 Josip Medved.

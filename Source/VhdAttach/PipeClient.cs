@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Threading;
@@ -6,17 +6,19 @@ using System.Threading;
 namespace VhdAttach {
     internal static class PipeClient {
 
-        public static PipeResponse Attach(string path, bool mountReadOnly, bool initializeDisk) {
+        public static PipeResponse Attach(string path, bool mountReadOnly, bool initializeDisk, bool noDriveLetter = false, string mountFolder = null) {
             var data = new Dictionary<string, string>();
-            data.Add("Path", path);
+            data.Add("Path", PathHelper.ToServicePath(path));
             data.Add("MountReadOnly", mountReadOnly.ToString(CultureInfo.InvariantCulture));
             data.Add("InitializeDisk", initializeDisk.ToString(CultureInfo.InvariantCulture));
-            return Send("Attach", data);
+            data.Add("NoDriveLetter", noDriveLetter.ToString(CultureInfo.InvariantCulture));
+            data.Add("MountFolder", mountFolder ?? "");
+            return Send("Attach", data, 30000); //log replay and mount folders can take a while
         }
 
         public static PipeResponse Detach(string path) {
             var data = new Dictionary<string, string>();
-            data.Add("Path", path);
+            data.Add("Path", PathHelper.ToServicePath(path));
             return Send("Detach", data);
         }
 
@@ -62,10 +64,10 @@ namespace VhdAttach {
             return Send("RegisterExtensionVhd", data);
         }
 
-        private static Medo.IO.NamedPipe Pipe = new Medo.IO.NamedPipe("JosipMedved-VhdAttach-Commands");
+        private static Medo.IO.NamedPipe Pipe = new Medo.IO.NamedPipe(VhdAttachCommon.Branding.PipeName);
 
         private static PipeResponse Send(string operation, Dictionary<string, string> data, int timeout = 5000) {
-            var packetOut = new Medo.Net.TinyPacket("VhdAttach", operation, data);
+            var packetOut = new Medo.Net.TinyPacket(VhdAttachCommon.Branding.PacketProduct, operation, data);
             try {
                 Pipe.Open();
                 Pipe.Write(packetOut.GetBytes());

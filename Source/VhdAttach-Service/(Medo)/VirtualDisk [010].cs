@@ -106,12 +106,9 @@ namespace Medo.IO {
                         fileAccess = ((fileAccess & VirtualDiskAccessMask.GetInfo) == VirtualDiskAccessMask.GetInfo) ? VirtualDiskAccessMask.GetInfo : 0;
                         fileAccess |= VirtualDiskAccessMask.AttachReadOnly;
                         this.DiskType = VirtualDiskType.Iso;
-                    } else if (this.FileName.EndsWith(".vhdx", StringComparison.OrdinalIgnoreCase)) {
-                        storageType.DeviceId = NativeMethods.VIRTUAL_STORAGE_TYPE_DEVICE_VHDX;
-                        this.DiskType = VirtualDiskType.Vhdx;
-                    } else {
-                        storageType.DeviceId = NativeMethods.VIRTUAL_STORAGE_TYPE_DEVICE_VHD;
-                        this.DiskType = VirtualDiskType.Vhd;
+                    } else { //let VirtDisk detect VHD/VHDX from content (handles .avhd/.avhdx and misnamed files)
+                        storageType.DeviceId = NativeMethods.VIRTUAL_STORAGE_TYPE_DEVICE_UNKNOWN;
+                        this.DiskType = VirtualDiskType.AutoDetect;
                     }
                     break;
 
@@ -131,10 +128,17 @@ namespace Medo.IO {
                     this.DiskType = VirtualDiskType.Vhdx;
                     break;
             }
-            storageType.VendorId = NativeMethods.VIRTUAL_STORAGE_TYPE_VENDOR_MICROSOFT;
+            storageType.VendorId = (storageType.DeviceId == NativeMethods.VIRTUAL_STORAGE_TYPE_DEVICE_UNKNOWN) ? Guid.Empty : NativeMethods.VIRTUAL_STORAGE_TYPE_VENDOR_MICROSOFT;
 
             int res = NativeMethods.OpenVirtualDisk(ref storageType, this.FileName, (NativeMethods.VIRTUAL_DISK_ACCESS_MASK)fileAccess, NativeMethods.OPEN_VIRTUAL_DISK_FLAG.OPEN_VIRTUAL_DISK_FLAG_NONE, ref parameters, ref _handle);
             if (res == NativeMethods.ERROR_SUCCESS) {
+                if (this.DiskType == VirtualDiskType.AutoDetect) {
+                    try {
+                        this.GetVirtualStorageType(out var deviceId, out _);
+                        if (deviceId == NativeMethods.VIRTUAL_STORAGE_TYPE_DEVICE_VHD) { this.DiskType = VirtualDiskType.Vhd; }
+                        else if (deviceId == NativeMethods.VIRTUAL_STORAGE_TYPE_DEVICE_VHDX) { this.DiskType = VirtualDiskType.Vhdx; }
+                    } catch (Win32Exception) { }
+                }
             } else {
                 _handle.SetHandleAsInvalid();
                 if ((res == NativeMethods.ERROR_FILE_NOT_FOUND) || (res == NativeMethods.ERROR_PATH_NOT_FOUND)) {

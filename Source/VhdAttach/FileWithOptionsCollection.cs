@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using VhdAttachCommon;
 
@@ -10,7 +10,7 @@ namespace VhdAttach {
         public bool Remove(string fileName) {
             FileWithOptions selectedItem = null;
             foreach (var item in this) {
-                if (string.Equals(item.FileName, fileName, StringComparison.OrdinalIgnoreCase)) {
+                if (string.Equals(item.FileName, fileName, StringComparison.OrdinalIgnoreCase) || string.Equals(item.FileName, PathHelper.ToServicePath(fileName), StringComparison.OrdinalIgnoreCase)) {
                     selectedItem = item;
                     break;
                 }

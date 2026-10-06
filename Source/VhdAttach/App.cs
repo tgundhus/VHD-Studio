@@ -25,7 +25,7 @@ namespace VhdAttach {
 
                 if (!((Environment.OSVersion.Version.Build < 7000) || (App.IsRunningOnMono))) {
                     var appId = new FileInfo(Assembly.GetExecutingAssembly().Location).Directory.FullName;
-                    if (appId.Length > 127) { appId = @"JosipMedved_VhdAttach\" + appId.Substring(appId.Length - 127 - 20); }
+                    if (appId.Length > 127) { appId = @"VhdStudio\" + appId.Substring(appId.Length - 127 - 20); }
                     NativeMethods.SetCurrentProcessExplicitAppUserModelID(appId);
                 } else {
                     Medo.MessageBox.ShowError(null, "This program requires Windows 7 or later.");
@@ -34,6 +34,19 @@ namespace VhdAttach {
 
                 Medo.Windows.Forms.TaskbarProgress.DoNotThrowNotImplementedException = true;
 
+
+                if (Medo.Application.Args.Current.ContainsKey("DiskManager")) {
+                    var diskNumber = Medo.Application.Args.Current.GetValue("Disk", -1);
+                    Application.Run(new Storage.DiskManagerForm((diskNumber >= 0) ? diskNumber : (int?)null) { StartPosition = FormStartPosition.CenterScreen });
+                    return;
+                }
+
+                if (Medo.Application.Args.Current.ContainsKey("Maintain")) {
+                    var maintainFiles = Medo.Application.Args.Current.GetValues("");
+                    if (maintainFiles.Length == 0) { System.Environment.Exit(1); }
+                    Application.Run(new MaintenanceForm(maintainFiles[0].TrimEnd('\"'), Medo.Application.Args.Current.GetValue("Task", null)) { StartPosition = FormStartPosition.CenterScreen });
+                    return;
+                }
 
                 bool doAttach = Medo.Application.Args.Current.ContainsKey("Attach");
                 bool doDetach = Medo.Application.Args.Current.ContainsKey("Detach") && (!doAttach);
@@ -92,7 +105,7 @@ namespace VhdAttach {
 
         private static void UnhandledCatch_ThreadException(object sender, ThreadExceptionEventArgs e) {
 #if !DEBUG
-            Medo.Diagnostics.ErrorReport.ShowDialog(null, e.Exception, new Uri("https://medo64.com/feedback/"));
+            Feedback.ShowUnhandledException(null, e.Exception);
 #else
             throw e.Exception;
 #endif

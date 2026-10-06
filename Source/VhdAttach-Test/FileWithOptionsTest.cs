@@ -60,5 +60,25 @@ namespace VhdAttachTest {
             Assert.AreEqual("Test.vhd", x.ToString());
         }
 
+        [TestMethod()]
+        public void Test_FileWithOptions_Read_MultipleOptions() { //regression: options were matched against the whole option string
+            var x = new FileWithOptions(@"/readonly,nodriveletter/E:\Virtual Disks\Install.vhd");
+            Assert.AreEqual(@"E:\Virtual Disks\Install.vhd", x.FileName);
+            Assert.AreEqual(true, x.ReadOnly);
+            Assert.AreEqual(true, x.NoDriveLetter);
+        }
+
+        [TestMethod()]
+        public void Test_FileWithOptions_MountFolder_RoundTrip() {
+            var x = new FileWithOptions(@"D:\Disks\Data.vhdx") { NoDriveLetter = true, MountFolder = @"C:\Mounts\Data, 2024" };
+            var text = x.ToString();
+            Assert.IsFalse(text.Substring(1, text.IndexOf('/', 1) - 1).Contains(@"\"));
+            var y = new FileWithOptions(text);
+            Assert.AreEqual(@"D:\Disks\Data.vhdx", y.FileName);
+            Assert.AreEqual(@"C:\Mounts\Data, 2024", y.MountFolder);
+            Assert.AreEqual(true, y.NoDriveLetter);
+            Assert.AreEqual(false, y.ReadOnly);
+        }
+
     }
 }

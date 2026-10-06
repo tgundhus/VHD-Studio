@@ -9,18 +9,18 @@ using Microsoft.Win32;
 namespace VhdAttachCommon {
     internal static class ServiceSettings {
 
-        private static readonly string RootSubkeyPath = @"Software\Josip Medved\VHD Attach";
+        private static readonly string RootSubkeyPath = Branding.SettingsSubkeyPath;
         private static readonly RegistryKey RootRegistryKey = Registry.LocalMachine;
-        private static readonly string pathToVhdAttach = Path.Combine((new FileInfo(Assembly.GetExecutingAssembly().Location)).DirectoryName, "VhdAttach.exe");
+        private static readonly string pathToVhdAttach = Path.Combine(AppContext.BaseDirectory, Branding.ApplicationExe);
 
 
         public static FileWithOptions[] AutoAttachVhdList {
             get {
                 var lines = new List<string>();
-                using (RegistryKey rk = Registry.LocalMachine.OpenSubKey(RootSubkeyPath, false)) {
-                    if (rk != null) {
-                        var fileArray = rk.GetValue("AutoAttachVhdList", null) as string[];
-                        if (fileArray != null) { lines.AddRange(fileArray); }
+                foreach (var subkeyPath in new[] { RootSubkeyPath, Branding.LegacySettingsSubkeyPath }) { //falls back to VHD Attach 4.x list until first save
+                    using (RegistryKey rk = Registry.LocalMachine.OpenSubKey(subkeyPath, false)) {
+                        var fileArray = rk?.GetValue("AutoAttachVhdList", null) as string[];
+                        if (fileArray != null) { lines.AddRange(fileArray); break; }
                     }
                 }
                 var files = new List<FileWithOptions>();
@@ -46,7 +46,7 @@ namespace VhdAttachCommon {
 
 
         /// <summary>
-        /// Returns true if VHD Attach is handling extension.
+        /// Returns true if VHD Studio is handling extension.
         /// </summary>
         public static bool ContextMenuVhd {
             get {
@@ -86,7 +86,7 @@ namespace VhdAttachCommon {
         }
 
         /// <summary>
-        /// Returns true if VHD Attach is handling extension.
+        /// Returns true if VHD Studio is handling extension.
         /// </summary>
         public static bool ContextMenuIso {
             get {
@@ -125,7 +125,7 @@ namespace VhdAttachCommon {
                 if (value == true) {
                     using (var rk = Registry.ClassesRoot.OpenSubKey(@"Windows.VhdFile\shell", RegistryKeyPermissionCheck.ReadWriteSubTree, RegistryRights.FullControl)) {
                         using (var keyMain = rk.CreateSubKey("VhdAttach-Open")) {
-                            keyMain.SetValue("", "Open with VHD Attach", RegistryValueKind.String);
+                            keyMain.SetValue("", "Open with " + Branding.ProductName, RegistryValueKind.String);
                             keyMain.SetValue("Icon", @"""" + pathToVhdAttach + @"""", RegistryValueKind.String);
                             keyMain.SetValue("MultiSelectModel", "Document", RegistryValueKind.String);
                             using (var keyCommand = keyMain.CreateSubKey("command")) {
@@ -274,7 +274,7 @@ namespace VhdAttachCommon {
                 if (value == true) {
                     using (var rk = Registry.ClassesRoot.OpenSubKey(@"Windows.IsoFile\shell", RegistryKeyPermissionCheck.ReadWriteSubTree, RegistryRights.FullControl)) {
                         using (var keyMain = rk.CreateSubKey("VhdAttach-Open")) {
-                            keyMain.SetValue("", "Open with VHD Attach", RegistryValueKind.String);
+                            keyMain.SetValue("", "Open with " + Branding.ProductName, RegistryValueKind.String);
                             keyMain.SetValue("Icon", @"""" + pathToVhdAttach + @"""", RegistryValueKind.String);
                             keyMain.SetValue("MultiSelectModel", "Document", RegistryValueKind.String);
                             using (var keyCommand = keyMain.CreateSubKey("command")) {

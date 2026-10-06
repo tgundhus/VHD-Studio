@@ -19,6 +19,9 @@
     <Compile Include="..\VhdAttach-Service\ServiceSettings.cs" Link="Shared\ServiceSettings.cs" />
     <Compile Include="..\VhdAttach-Service\Volume.cs" Link="Shared\Volume.cs" />
     <Compile Include="..\VhdAttach-Service\Branding.cs" Link="Shared\Branding.cs" />
+    <Compile Include="..\VhdAttach-Service\VirtualDiskImage.cs" Link="Shared\VirtualDiskImage.cs" />
+    <Compile Include="..\VhdAttach-Service\VhdxHeader.cs" Link="Shared\VhdxHeader.cs" />
+    <Compile Include="..\VhdAttach-Service\(Medo)\VirtualDisk [010].cs" Link="(Medo)\VirtualDisk [010].cs" />
     <Compile Remove="Properties\SolutionInfo.cs" />
   </ItemGroup>
 

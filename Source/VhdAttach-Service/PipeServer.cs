@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -11,7 +11,7 @@ using VhdAttachCommon;
 namespace VhdAttachService {
     internal static class PipeServer {
 
-        public static Medo.IO.NamedPipe Pipe = new Medo.IO.NamedPipe("JosipMedved-VhdAttach-Commands");
+        public static Medo.IO.NamedPipe Pipe = new Medo.IO.NamedPipe(Branding.PipeName);
 
         public static void Start() {
             Pipe.CreateWithFullAccess();
@@ -25,7 +25,7 @@ namespace VhdAttachService {
 
             var packet = TinyPacket.Parse(buffer);
             if (packet != null) {
-                if (packet.Product != "VhdAttach") { return null; }
+                if (packet.Product != Branding.PacketProduct) { return null; }
                 try {
                     switch (packet.Operation) {
                         case "Attach":
@@ -78,26 +78,13 @@ namespace VhdAttachService {
 
         private static void ReceivedAttach(TinyPacket packet) {
             try {
-                var path = packet["Path"];
-                var isReadOnly = packet["MountReadOnly"].Equals("True", StringComparison.OrdinalIgnoreCase);
+                var file = new FileWithOptions(packet["Path"]) {
+                    ReadOnly = packet["MountReadOnly"].Equals("True", StringComparison.OrdinalIgnoreCase),
+                    NoDriveLetter = string.Equals(packet["NoDriveLetter"], "True", StringComparison.OrdinalIgnoreCase),
+                    MountFolder = string.IsNullOrEmpty(packet["MountFolder"]) ? null : packet["MountFolder"],
+                };
                 var shouldInitialize = packet["InitializeDisk"].Equals("True", StringComparison.OrdinalIgnoreCase);
-                string diskPath = null;
-                using (var disk = new Medo.IO.VirtualDisk(path)) {
-                    var access = Medo.IO.VirtualDiskAccessMask.All;
-                    var options = Medo.IO.VirtualDiskAttachOptions.PermanentLifetime;
-                    if (isReadOnly) {
-                        if (shouldInitialize == false) {
-                            access = Medo.IO.VirtualDiskAccessMask.AttachReadOnly;
-                        }
-                        options |= Medo.IO.VirtualDiskAttachOptions.ReadOnly;
-                    }
-                    disk.Open(access);
-                    disk.Attach(options);
-                    if (shouldInitialize) { diskPath = disk.GetAttachedPath(); }
-                }
-                if (shouldInitialize) {
-                    DiskIO.InitializeDisk(diskPath);
-                }
+                AttachHelper.Attach(file, shouldInitialize);
             } catch (Exception ex) {
                 throw new InvalidOperationException(string.Format("Virtual disk file \"{0}\" cannot be attached.", (new FileInfo(packet["Path"])).Name), ex);
             }

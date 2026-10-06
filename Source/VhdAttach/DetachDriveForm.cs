@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -47,7 +47,7 @@ namespace VhdAttach {
                     }
                 }
             } catch (TimeoutException) {
-                this._exceptions.Add(new InvalidOperationException(iDirectory.Name, new Exception("Cannot access VHD Attach service.")));
+                this._exceptions.Add(new InvalidOperationException(iDirectory.Name, new Exception(Messages.ServiceIOException)));
             } catch (Exception ex) {
                 this._exceptions.Add(new InvalidOperationException(iDirectory.Name, ex));
             }

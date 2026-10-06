@@ -89,15 +89,8 @@ namespace VhdAttachService {
             foreach (var fwo in todoList) {
                 try {
                     Thread.Sleep(1000); //a bit of breather
-                    var access = Medo.IO.VirtualDiskAccessMask.All;
-                    var options = Medo.IO.VirtualDiskAttachOptions.PermanentLifetime;
-                    if (fwo.ReadOnly) { options |= Medo.IO.VirtualDiskAttachOptions.ReadOnly; }
-                    if (fwo.NoDriveLetter) { options |= Medo.IO.VirtualDiskAttachOptions.NoDriveLetter; }
-                    var fileName = fwo.FileName;
-                    using (var disk = new Medo.IO.VirtualDisk(fileName)) {
-                        disk.Open(access);
-                        disk.Attach(options);
-                    }
+                    AttachHelper.Attach(fwo);
+
                 } catch (Exception ex) {
                     if (failedList != null) { failedList.Add(fwo); }
                     Trace.TraceError("E: Cannot attach file \"" + fwo.FileName + "\". " + ex.Message);

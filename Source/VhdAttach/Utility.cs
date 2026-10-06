@@ -18,7 +18,7 @@ namespace VhdAttach {
 
 
         public static void FixServiceErrorsIfNeeded() {
-            using (var service = new ServiceController("VhdAttach")) {
+            using (var service = new ServiceController(VhdAttachCommon.Branding.ServiceName)) {
                 try {
                     if (service.Status != ServiceControllerStatus.Running) {
                         try {
@@ -35,8 +35,8 @@ namespace VhdAttach {
 
         public static void ForceStartService() {
             try {
-                var directory = (new FileInfo(Assembly.GetExecutingAssembly().Location)).DirectoryName;
-                Process.Start(Path.Combine(directory, "VhdAttachService.exe"), "/Start").WaitForExit();
+                var directory = AppContext.BaseDirectory;
+                Process.Start(Path.Combine(directory, VhdAttachCommon.Branding.ServiceExe), "/Start").WaitForExit();
             } catch (Exception ex) {
                 throw new InvalidOperationException(ex.Message, ex); //cannot throw InvalidOperationException because of service existance detection
             }
@@ -44,8 +44,8 @@ namespace VhdAttach {
 
         public static void ForceInstallService() {
             try {
-                var directory = (new FileInfo(Assembly.GetExecutingAssembly().Location)).DirectoryName;
-                Process.Start(Path.Combine(directory, "VhdAttachService.exe"), "/Install").WaitForExit();
+                var directory = AppContext.BaseDirectory;
+                Process.Start(Path.Combine(directory, VhdAttachCommon.Branding.ServiceExe), "/Install").WaitForExit();
             } catch (Exception ex) {
                 throw new InvalidOperationException(ex.Message, ex);
             }

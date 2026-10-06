@@ -36,7 +36,8 @@ namespace VhdAttachTest {
 
         public static string NewPath(string extension = ".vhdx") {
             Directory.CreateDirectory(Root);
-            return Path.Combine(Root, "disk-" + Guid.NewGuid().ToString("N").Substring(0, 8) + extension);
+            //%TEMP% often contains 8.3 names (RUNNER~1); Windows reports backing files with long names
+            return Path.Combine(PathGuard.GetLongPath(Root), "disk-" + Guid.NewGuid().ToString("N").Substring(0, 8) + extension);
         }
 
         /// <summary>
@@ -88,7 +89,7 @@ namespace VhdAttachTest {
             var number = int.Parse(this.PhysicalPath.Substring(this.PhysicalPath.IndexOf("PhysicalDrive", StringComparison.OrdinalIgnoreCase) + 13));
             for (int i = 0; i < 40; i++) {
                 var disk = StorageManager.GetDisks().FirstOrDefault(d => d.Number == number);
-                if ((disk != null) && disk.IsVirtual && string.Equals(Path.GetFullPath(disk.Location ?? ""), Path.GetFullPath(this.FileName), StringComparison.OrdinalIgnoreCase)) { return disk; }
+                if ((disk != null) && disk.IsVirtual && string.Equals(PathGuard.GetLongPath(disk.Location ?? ""), PathGuard.GetLongPath(this.FileName), StringComparison.OrdinalIgnoreCase)) { return disk; }
                 Thread.Sleep(250);
             }
             throw new InvalidOperationException("SAFETY STOP: disk " + number + " is not the scratch disk " + this.FileName);

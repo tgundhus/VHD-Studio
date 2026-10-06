@@ -35,6 +35,13 @@ jobs:
         shell: pwsh
         run: dotnet test Source/VhdAttach-Test/VhdAttach-Test.csproj -c Release -- --filter "TestCategory=Elevated"
 
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: Source/**/TestResults/**
+
       - uses: actions/upload-artifact@v4
         with:
           name: vhdstudio-setup

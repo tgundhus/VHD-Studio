@@ -40,7 +40,13 @@ $hash = (git -C $root log -n 1 --format=%h 2>$null)
 if ($hash -and (git -C $root status --porcelain)) { $hash += '+' }
 
 if (-not $SkipTests) {
-    Invoke-Step 'Test' { dotnet test $solution -c $Configuration --nologo }
+    Invoke-Step 'Test' {
+        dotnet test $solution -c $Configuration --nologo -- --output Detailed
+        if ($LASTEXITCODE -ne 0) { #show why, not just that it failed
+            Get-ChildItem (Join-Path $root 'Source') -Recurse -Filter '*.log' | Where-Object { $_.DirectoryName -like '*TestResults*' } |
+                ForEach-Object { Select-String -Path $_.FullName -Pattern '^\s*> failed ' -Context 0, 8 } | Select-Object -First 30 | ForEach-Object { Write-Host $_.ToString() }
+        }
+    }
 }
 
 Invoke-Step 'Publish' {

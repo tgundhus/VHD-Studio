@@ -91,9 +91,12 @@ An end-to-end test suite verifies the data on real virtual disks byte for byte a
 
 ## Installation
 
-1. Install the [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0) if you don't have it.
-   The installer checks for it and links you to the download.
-2. Download `vhdstudio-<version>-setup.exe` from [Releases](https://github.com/tgundhus/VhdAttach/releases) and run it.
+Download one of the installers from [Releases](https://github.com/tgundhus/VhdAttach/releases):
+
+| Installer | Size | Use it when |
+|---|---|---|
+| `vhdstudio-<version>-setup-standalone.exe` | ~36 MB | You just want it to work. .NET is embedded, so there's nothing else to install. |
+| `vhdstudio-<version>-setup.exe` | ~2.4 MB | You manage machines centrally. Uses the shared [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0), which Windows Update, WSUS or Intune keep patched. Setup checks for it and links to the download if it's missing. |
 
 Upgrading from **VHD Attach 4.x**: setup removes the old version and its service automatically and
 keeps your auto-mount list.

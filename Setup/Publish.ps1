@@ -19,7 +19,8 @@ param(
     [string] $CertificateThumbprint,
     [string] $TimestampUrl = 'http://timestamp.digicert.com',
     [switch] $SkipTests,
-    [switch] $SkipInstaller
+    [switch] $SkipInstaller,
+    [switch] $SelfContained     #embed the .NET runtime (standalone installer, no prerequisite)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -45,7 +46,7 @@ if (-not $SkipTests) {
 Invoke-Step 'Publish' {
     if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
     foreach ($project in 'VhdAttach\VhdAttach.csproj', 'VhdAttach-Service\VhdAttach-Service.csproj') {
-        dotnet publish (Join-Path $root "Source\$project") -c $Configuration -r win-x64 --self-contained false -o $publishDir --nologo
+        dotnet publish (Join-Path $root "Source\$project") -c $Configuration -r win-x64 --self-contained $(if ($SelfContained) { 'true' } else { 'false' }) -o $publishDir --nologo
         if ($LASTEXITCODE -ne 0) { return }
     }
 }
@@ -66,17 +67,19 @@ if (-not $SkipInstaller) {
 
     Invoke-Step 'Build installer' {
         New-Item -ItemType Directory -Force $releaseDir | Out-Null
-        & $iscc "/DVersionHash=$hash" (Join-Path $PSScriptRoot 'VhdStudio.iss')
+        $defines = @("/DVersionHash=$hash")
+        if ($SelfContained) { $defines += '/DSelfContained' }
+        & $iscc @defines (Join-Path $PSScriptRoot 'VhdStudio.iss')
     }
 
     if ($CertificateThumbprint) {
         Invoke-Step 'Sign installer' {
             $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
-            $setup = Get-ChildItem $releaseDir -Filter 'vhdstudio-*-setup.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            $setup = Get-ChildItem $releaseDir -Filter 'vhdstudio-*-setup*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
             & $signtool.FullName sign /fd SHA256 /sha1 $CertificateThumbprint /tr $TimestampUrl /td SHA256 $setup.FullName
         }
     }
-    Get-ChildItem $releaseDir -Filter 'vhdstudio-*-setup.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | ForEach-Object { Write-Host "Created $($_.FullName)" -ForegroundColor Green }
+    Get-ChildItem $releaseDir -Filter 'vhdstudio-*-setup*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | ForEach-Object { Write-Host "Created $($_.FullName)" -ForegroundColor Green }
 } else {
     Write-Host "Binaries are in $publishDir" -ForegroundColor Green
 }

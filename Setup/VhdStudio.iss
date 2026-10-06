@@ -8,7 +8,12 @@
 #define AppCompany     GetStringFileInfo('..\Publish\' + AppExe, 'CompanyName')
 #define AppCopyright   GetStringFileInfo('..\Publish\' + AppExe, 'LegalCopyright')
 #define AppBase        LowerCase(StringChange(AppName, ' ', ''))
-#define AppSetupFile   AppBase + '-' + AppVersion + '-setup'
+; /DSelfContained builds the standalone installer (.NET runtime embedded, no prerequisite).
+#ifdef SelfContained
+#  define AppSetupFile   AppBase + '-' + AppVersion + '-setup-standalone'
+#else
+#  define AppSetupFile   AppBase + '-' + AppVersion + '-setup'
+#endif
 #define AppUrl         "https://github.com/tgundhus/VhdAttach"
 
 #define AppVersionEx   AppVersion
@@ -87,8 +92,6 @@ Name: "{autoprograms}\{#AppName} Disk Manager";  Filename: "{app}\{#AppExe}";  P
 [Registry]
 ; Only the marker is removed on uninstall; the auto-mount list survives so a reinstall keeps it.
 Root: HKLM;  Subkey: "Software\VHD Studio";                                    ValueType: dword;   ValueName: "Installed";         ValueData: "1";              Flags: uninsdeletevalue;
-Root: HKCU;  Subkey: "Software\Tobias Gundhus\VHD Studio";                     ValueType: none;                                                                 Flags: uninsdeletekey;
-Root: HKCU;  Subkey: "Software\Tobias Gundhus";                                ValueType: none;                                                                 Flags: uninsdeletekeyifempty;
 
 ; Make the built-in Windows.VhdFile/Windows.IsoFile handlers own the extensions so the verbs below show up.
 Root: HKCR;  Subkey: ".vhd";                                                   ValueType: none;    ValueName: "";                  Flags: deletevalue;                                                     Tasks: context_vhd_open context_vhd_attach context_vhd_attachreadonly context_vhd_detach context_vhd_maintain;
@@ -177,20 +180,39 @@ begin
   WizardForm.LicenseAcceptedRadio.Checked := True;
 end;
 
-{ Framework-dependent build: needs the .NET Desktop Runtime 10 or newer (x64). }
+function HasVersion10OrNewer(const Names: TArrayOfString): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 0 to GetArrayLength(Names) - 1 do begin
+    if StrToIntDef(Copy(Names[I], 1, Pos('.', Names[I]) - 1), 0) >= 10 then begin
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
+
+{ Framework-dependent build: needs the .NET Desktop Runtime 10 or newer (x64).
+  The .NET installer registers versions in the 32-bit registry view (WOW6432Node); the runtime folder is checked as well. }
 function IsDesktopRuntimeInstalled: Boolean;
 var
   Names: TArrayOfString;
-  I, Major: Integer;
+  FindRec: TFindRec;
 begin
-  Result := False;
-  if RegGetValueNames(HKLM64, DesktopRuntimeKey, Names) then begin
-    for I := 0 to GetArrayLength(Names) - 1 do begin
-      Major := StrToIntDef(Copy(Names[I], 1, Pos('.', Names[I]) - 1), 0);
-      if Major >= 10 then begin
-        Result := True;
-        Exit;
-      end;
+  Result := (RegGetValueNames(HKLM32, DesktopRuntimeKey, Names) and HasVersion10OrNewer(Names))
+         or (RegGetValueNames(HKLM64, DesktopRuntimeKey, Names) and HasVersion10OrNewer(Names));
+  if Result then Exit;
+  if FindFirst(ExpandConstant('{commonpf64}\dotnet\shared\Microsoft.WindowsDesktop.App\*'), FindRec) then begin
+    try
+      repeat
+        if ((FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0) and (StrToIntDef(Copy(FindRec.Name, 1, Pos('.', FindRec.Name) - 1), 0) >= 10) then begin
+          Result := True;
+          Exit;
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
     end;
   end;
 end;
@@ -200,6 +222,9 @@ var
   ErrorCode: Integer;
 begin
   Result := True;
+#ifdef SelfContained
+  Exit; { runtime is embedded }
+#endif
   if not IsDesktopRuntimeInstalled then begin
     if SuppressibleMsgBox('{#AppName} requires the .NET 10 Desktop Runtime (x64).' + #13#10#13#10 + 'Open the download page now? Run this setup again after installing it.', mbConfirmation, MB_YESNO, IDYES) = IDYES then
       ShellExec('open', RuntimeDownloadUrl, '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);

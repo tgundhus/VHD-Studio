@@ -31,6 +31,4 @@ Temporary/**
 *.vspscc
 *.vssscc
 *.zip
-bin/
-obj/
-.vs/
+Publish/**

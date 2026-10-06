@@ -1,31 +1,132 @@
-### VHD Attach ###
+<p align="center">
+  <img src="docs/images/logo.png" width="96" alt="VHD Studio logo">
+</p>
 
-This is small tool that adds Attach and Detach option to contextual (aka
-right-click) menu of the Virtual disk (vhd) files. That enables those
-operations to be done without trip to Disk Management console and allows for
-automatic disk attachment during sysstem startup.
+<h1 align="center">VHD Studio</h1>
+
+<p align="center">
+  <b>Attach, maintain and partition VHD, VHDX and ISO images on any Windows edition. No Hyper-V and no scripts needed.</b>
+</p>
+
+<p align="center">
+  <img src="docs/images/main-window.png" alt="VHD Studio main window" width="720">
+</p>
+
+VHD Studio is a free, open-source Windows utility for working with virtual disk
+files. It adds **Attach / Detach** to the Explorer right-click menu, re-attaches
+your disks automatically at startup, and includes a **Maintenance** window and a
+DiskPart-style **Disk Manager**. Together they cover the jobs that otherwise need
+the Hyper-V PowerShell module (missing on Windows Home), `diskpart` scripts or
+Disk Management.
+
+> **Credits:** VHD Studio is a fork of **[VHD Attach](https://github.com/medo64/VhdAttach)**
+> by **Josip Medved ([@medo64](https://github.com/medo64))**, who built and maintained it
+> from 2009 onward. The attach/detach engine, auto-mount service and much of the code are his
+> work, released under the MIT license. Thank you, Josip! For the classic tool, visit
+> [medo64.com/vhdattach](https://www.medo64.com/vhdattach/).
 
 
-#### Shortcut Keys ####
+## Features
 
-  * `F5`                      Refresh.
-  * `F6`                      Attach.
-  * `Ctrl+A`                  Select all.
-  * `Ctrl+C`                  Copy.
-  * `Ctrl+N`                  New file.
-  * `Ctrl+O`                  Open file.
-  * `Alt+A`                   Show attach menu.
-  * `Alt+D`                   Detach.
-  * `Alt+M`                   Auto-mount.
-  * `Alt+O`                   Show open menu (recent files).
+### Attach & auto-mount
+* Attach / detach from Explorer's context menu (VHD, VHDX, ISO), read-only if you like.
+* **Auto-mount at startup** through a small Windows service: read-only, no drive letter, or
+  **mounted into an empty folder** instead of a drive letter.
+* Users without admin rights can attach disks, because the service does the privileged work.
+  The service checks the user's own permissions first, so nobody can attach a file they couldn't open themselves.
+* **Automatic VHDX log replay.** A VHDX that wasn't closed cleanly (crash, power loss) normally fails
+  with a confusing *"Access denied"*. VHD Studio detects the pending log and replays it first.
+* Mapped network drives are translated to UNC paths so the service can reach them.
+
+### Maintenance (no Hyper-V required)
+
+<img src="docs/images/maintenance.png" alt="Maintenance window" width="640">
+
+| Task | What it does |
+|---|---|
+| **Compact** | Returns free space to the host. Full (NTFS/ReFS-aware) or zeroed-blocks-only mode for WSL / Docker `ext4.vhdx`, with optional `wsl --shutdown`. Shows the before/after size. |
+| **Resize** | Grow VHD/VHDX, or shrink VHDX down to the smallest safe size. |
+| **Convert** | VHD ↔ VHDX, dynamic ↔ fixed, 512 / 4K logical sectors. The source file is never modified. |
+| **Differencing disk** | Create a child disk to experiment safely. Merge it back later, or delete it to discard the changes. |
+| **Merge** | Merge a differencing (child) disk into its parent. |
+| **Repair** | Replay the VHDX log, fix a broken parent path (`Set-VHD -ParentPath` equivalent), or reset a duplicate disk identifier. |
+| **Details** | Type, virtual / on-disk size, fragmentation, sector sizes, smallest safe size, parent chain. |
+
+Long operations show progress and can be cancelled.
+
+### Disk Manager (DiskPart GUI)
+
+<img src="docs/images/disk-manager.png" alt="Disk Manager" width="720">
+
+* Lists disks, partitions and volumes. Virtual disks are highlighted and shown with their backing file.
+* Initialize (GPT/MBR) and convert partition style.
+* Create, format (NTFS, ReFS, exFAT, FAT32), extend/shrink and delete partitions.
+* Assign or remove drive letters, and mount volumes in folders.
+* Online/offline, read-only, active flag, and clean.
+* Retrim free space before compacting, and scan or spot-fix the file system.
+* **Safety first:**
+  * The system and boot disks can never be changed.
+  * Physical disks are read-only until you explicitly unlock them.
+  * Destructive actions require typed confirmation.
+  * Every change shows the **equivalent PowerShell command** before it runs.
+
+Disk Manager is available from the toolbar (`Ctrl+D`), the Start menu, or `VhdStudio.exe /DiskManager`.
 
 
-#### Command Line Parameters ####
+## Installation
 
-    [/attach|/detach] "disk.vhd"
+1. Install the [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0) if you don't have it.
+   The installer checks for it and links you to the download.
+2. Download `vhdstudio-<version>-setup.exe` from [Releases](https://github.com/tgundhus/VhdAttach/releases) and run it.
 
-Attaches (or detaches) virtual disk using file disk.vhd.
+Upgrading from **VHD Attach 4.x**: setup removes the old version and its service automatically and
+keeps your auto-mount list.
 
-    [/detachdrive] "X:"
+Requires Windows 10 1809 or later, or Windows 11 (x64). Works on Home, Pro and Enterprise.
 
-Detaches virtual disk attached to drive letter.
+
+## Shortcut keys
+
+| Key | Action |
+|---|---|
+| `F5` | Refresh |
+| `F6` | Attach |
+| `Ctrl+N` | New virtual disk |
+| `Ctrl+O` | Open file |
+| `Ctrl+D` | Disk Manager |
+| `Alt+T` | Maintenance menu |
+| `Alt+A` | Attach menu |
+| `Alt+D` | Detach |
+| `Alt+M` | Auto-mount menu |
+| `Alt+O` | Recent files |
+| `Ctrl+A` / `Ctrl+C` | Select all / copy details |
+
+
+## Command line
+
+```text
+VhdStudio.exe "disk.vhdx"                           Open a disk
+VhdStudio.exe /attach [/readonly] "disk.vhdx"       Attach (read-only)
+VhdStudio.exe /detach "disk.vhdx"                   Detach
+VhdStudio.exe /detachdrive "X:"                     Detach the virtual disk behind a drive letter
+VhdStudio.exe /changeletter "disk.vhdx" "Y:"        Set the drive letter of an attached disk
+VhdStudio.exe /maintain "disk.vhdx" [/task=Compact] Open Maintenance (Details, Compact, Resize,
+                                                    Convert, Differencing, Merge, Repair)
+VhdStudio.exe /diskmanager [/disk=N]                Open Disk Manager
+```
+
+
+## Building
+
+See [BUILD.md](BUILD.md). In short: `dotnet test Source\VhdStudio.sln`, then `Setup\Publish.ps1`.
+
+
+## Roadmap
+
+The market analysis and the prioritized feature proposal are in [docs/PROPOSAL.md](docs/PROPOSAL.md).
+Bug reports and ideas are welcome in [Issues](https://github.com/tgundhus/VhdAttach/issues).
+
+
+## License
+
+[MIT](LICENSE.md). Original work © 2009 Josip Medved, modifications © 2026 Tobias Gundhus.

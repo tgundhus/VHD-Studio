@@ -1,6 +1,7 @@
 ### The MIT License ###
 
-Copyright 2009 Josip Medved <jmedved@jmedved.com>
+Copyright 2009 Josip Medved <jmedved@jmedved.com> (original VHD Attach)
+Copyright 2026 Tobias Gundhus (VHD Studio modifications)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in

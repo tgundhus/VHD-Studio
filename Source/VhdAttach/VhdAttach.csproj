@@ -10,8 +10,6 @@
     <ApplicationManifest>Properties\App.manifest</ApplicationManifest>
     <StartupObject>VhdAttach.App</StartupObject>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <ApplicationVisualStyles>true</ApplicationVisualStyles>
   </PropertyGroup>
 
   <ItemGroup>

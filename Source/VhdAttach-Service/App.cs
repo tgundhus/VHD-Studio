@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.ServiceProcess;
 using System.Windows.Forms;
@@ -10,6 +10,7 @@ namespace VhdAttachService {
         [STAThread()]
         static void Main() {
             System.AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
+            Application.SetHighDpiMode(HighDpiMode.SystemAware);
 
             if (Medo.Application.Args.Current.ContainsKey("Interactive")) {
 

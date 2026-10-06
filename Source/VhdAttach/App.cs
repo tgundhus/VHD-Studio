@@ -17,6 +17,7 @@ namespace VhdAttach {
             var mutexSecurity = new MutexSecurity();
             mutexSecurity.AddAccessRule(new MutexAccessRule(new SecurityIdentifier(WellKnownSidType.WorldSid, null), MutexRights.FullControl, AccessControlType.Allow));
             using (var setupMutex = MutexAcl.Create(false, @"Global\VhdStudio", out createdNew, mutexSecurity)) { //used by setup to detect running instances
+                System.Windows.Forms.Application.SetHighDpiMode(HighDpiMode.SystemAware);
                 System.Windows.Forms.Application.EnableVisualStyles();
                 System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
 

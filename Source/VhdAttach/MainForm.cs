@@ -361,10 +361,10 @@ namespace VhdAttach {
                                 var headerBytes = new byte[1024];
                                 var footerBytes = new byte[512];
                                 using (var vhdFile = new FileStream(vhdFileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
-                                    vhdFile.Read(footerCopyBytes, 0, 512);
-                                    vhdFile.Read(headerBytes, 0, 1024);
+                                    vhdFile.ReadExactly(footerCopyBytes, 0, 512);
+                                    vhdFile.ReadExactly(headerBytes, 0, 1024);
                                     vhdFile.Position = vhdFile.Length - 512;
-                                    vhdFile.Read(footerBytes, 0, 512);
+                                    vhdFile.ReadExactly(footerBytes, 0, 512);
                                 }
 
                                 var footer = new HardDiskFooter(footerBytes);

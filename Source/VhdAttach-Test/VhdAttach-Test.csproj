@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\VhdAttach-Service\PipeCaller.cs" Link="Shared\PipeCaller.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\VhdAttach\VhdAttach.csproj" />
   </ItemGroup>
 

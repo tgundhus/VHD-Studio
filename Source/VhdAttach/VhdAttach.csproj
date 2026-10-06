@@ -1,229 +1,34 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
-    <ProductVersion>10.0.20506</ProductVersion>
-    <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{523842B0-C6A8-4126-B9DE-0D9D814F838E}</ProjectGuid>
     <OutputType>WinExe</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>VhdAttach</RootNamespace>
-    <AssemblyName>VhdAttach</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <PlatformTarget>x86</PlatformTarget>
+    <AssemblyName>VhdStudio</AssemblyName>
+    <AssemblyTitle>VHD Studio</AssemblyTitle>
+    <Description>Attach, maintain and partition VHD, VHDX and ISO images.</Description>
     <ApplicationIcon>Properties\App.ico</ApplicationIcon>
     <ApplicationManifest>Properties\App.manifest</ApplicationManifest>
-    <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>Properties\App.snk</AssemblyOriginatorKeyFile>
     <StartupObject>VhdAttach.App</StartupObject>
-    <SccProjectName>
-    </SccProjectName>
-    <SccLocalPath>
-    </SccLocalPath>
-    <SccAuxPath>
-    </SccAuxPath>
-    <SccProvider>
-    </SccProvider>
-    <TargetFrameworkProfile>
-    </TargetFrameworkProfile>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationVisualStyles>true</ApplicationVisualStyles>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
-    <DebugSymbols>true</DebugSymbols>
-    <OutputPath>..\..\Binaries\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <DebugType>full</DebugType>
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <ErrorReport>prompt</ErrorReport>
-    <UseVSHostingProcess>false</UseVSHostingProcess>
-    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
-    <OutputPath>..\..\Binaries\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <Optimize>true</Optimize>
-    <DebugType>pdbonly</DebugType>
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <UseVSHostingProcess>false</UseVSHostingProcess>
-    <ErrorReport>prompt</ErrorReport>
-    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
-  </PropertyGroup>
+
   <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.configuration" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Management" />
-    <Reference Include="System.ServiceProcess" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Xml" />
+    <Compile Include="..\VhdAttach-Service\FileWithOptions.cs" Link="Shared\FileWithOptions.cs" />
+    <Compile Include="..\VhdAttach-Service\ServiceSettings.cs" Link="Shared\ServiceSettings.cs" />
+    <Compile Include="..\VhdAttach-Service\Volume.cs" Link="Shared\Volume.cs" />
+    <Compile Include="..\VhdAttach-Service\Branding.cs" Link="Shared\Branding.cs" />
+    <Compile Remove="Properties\SolutionInfo.cs" />
   </ItemGroup>
+
   <ItemGroup>
-    <Compile Include="%28Medo%29\AboutBox [014].cs" />
-    <Compile Include="%28Medo%29\Args [002].cs" />
-    <Compile Include="%28Medo%29\BinaryPrefixExtensions [002x].cs" />
-    <Compile Include="%28Medo%29\EntryAssembly [003].cs" />
-    <Compile Include="%28Medo%29\ErrorReport [020].cs" />
-    <Compile Include="%28Medo%29\MessageBox [007].cs" />
-    <Compile Include="%28Medo%29\NamedPipe [003].cs" />
-    <Compile Include="%28Medo%29\NumberDeclination [001].cs" />
-    <Compile Include="%28Medo%29\RecentFiles [005].cs" />
-    <Compile Include="%28Medo%29\Settings [012].cs" />
-    <Compile Include="%28Medo%29\State [015].cs" />
-    <Compile Include="%28Medo%29\StringAdder [002].cs" />
-    <Compile Include="%28Medo%29\TaskbarProgress [003].cs" />
-    <Compile Include="%28Medo%29\TinyMessage [009].cs" />
-    <Compile Include="%28Medo%29\UnhandledCatch [008].cs" />
-    <Compile Include="%28Medo%29\Upgrade [005].cs" />
-    <Compile Include="%28Medo%29\VirtualDisk [010].cs" />
-    <Compile Include="..\VhdAttach-Service\FileWithOptions.cs">
-      <Link>FileWithOptions.cs</Link>
-    </Compile>
-    <Compile Include="..\VhdAttach-Service\ServiceSettings.cs">
-      <Link>ServiceSettings.cs</Link>
-    </Compile>
-    <Compile Include="..\VhdAttach-Service\Volume.cs">
-      <Link>Volume.cs</Link>
-    </Compile>
-    <Compile Include="App.cs" />
-    <Compile Include="AttachForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="AttachForm.Designer.cs">
-      <DependentUpon>AttachForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="ChangeDriveLetterForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="ChangeDriveLetterForm.Designer.cs">
-      <DependentUpon>ChangeDriveLetterForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="CommandLineAddon.cs" />
-    <Compile Include="FileWithOptionsCollection.cs" />
-    <Compile Include="Helper.cs" />
-    <Compile Include="Messages.cs" />
-    <Compile Include="PathFromDevice.cs" />
-    <Compile Include="ReFS.cs" />
-    <Compile Include="RemoveIntegrityStreamForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="RemoveIntegrityStreamForm.Designer.cs">
-      <DependentUpon>RemoveIntegrityStreamForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Properties\Resources.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>Resources.resx</DependentUpon>
-    </Compile>
-    <Compile Include="ServiceWaitForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="ServiceWaitForm.Designer.cs">
-      <DependentUpon>ServiceWaitForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="CreateFixedDiskForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="CreateFixedDiskForm.Designer.cs">
-      <DependentUpon>CreateFixedDiskForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="DetachDriveForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="DetachDriveForm.Designer.cs">
-      <DependentUpon>DetachDriveForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="DetachForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="DetachForm.Designer.cs">
-      <DependentUpon>DetachForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="ListViewVhdItem.cs" />
-    <Compile Include="MainForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="MainForm.designer.cs">
-      <DependentUpon>MainForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="NewDiskForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="NewDiskForm.Designer.cs">
-      <DependentUpon>NewDiskForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="PipeClient.cs" />
-    <Compile Include="PipeResponse.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Properties\SolutionInfo.cs" />
-    <Compile Include="VirtualHardDiskImage\DynamicDiskHeader.cs" />
-    <Compile Include="VirtualHardDiskImage\HardDiskFooter.cs" />
-    <Compile Include="Settings.cs" />
-    <Compile Include="SettingsForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="SettingsForm.designer.cs">
-      <DependentUpon>SettingsForm.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Utility.cs" />
-    <None Include="Properties\App.snk" />
-    <None Include="Properties\App.manifest">
-      <SubType>Designer</SubType>
-    </None>
+    <PackageReference Include="System.Management" Version="10.0.0" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
   </ItemGroup>
+
   <ItemGroup>
-    <Content Include="Properties\App.ico" />
+    <InternalsVisibleTo Include="VhdAttachTest" Key="00240000048000009400000006020000002400005253413100040000010001008f35f900bf246cdcfd0d9eb278b58748591354ee056c42803acb0d99bbaf5e9deb5d995c47d15f925c39be2639210ac76d0417fc658754a432c899f1ddb1ddefa834a314775cf30f4db8739b65777752c700d316daaa43dc3b27c6ca2daa87332f6c6129e4e57f32324839d86a4bb02c9465c4c814a004a1f1b03997473efca8" />
   </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="AttachForm.resx">
-      <DependentUpon>AttachForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="ChangeDriveLetterForm.resx">
-      <DependentUpon>ChangeDriveLetterForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="CreateFixedDiskForm.resx">
-      <DependentUpon>CreateFixedDiskForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="DetachDriveForm.resx">
-      <DependentUpon>DetachDriveForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="DetachForm.resx">
-      <DependentUpon>DetachForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="MainForm.resx">
-      <DependentUpon>MainForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="NewDiskForm.resx">
-      <DependentUpon>NewDiskForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="RemoveIntegrityStreamForm.resx">
-      <DependentUpon>RemoveIntegrityStreamForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Properties\Resources.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Include="ServiceWaitForm.resx">
-      <DependentUpon>ServiceWaitForm.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="SettingsForm.resx">
-      <DependentUpon>SettingsForm.cs</DependentUpon>
-    </EmbeddedResource>
-  </ItemGroup>
-  <ItemGroup />
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PreBuildEvent>
-    </PreBuildEvent>
-    <PostBuildEvent>
-    </PostBuildEvent>
-  </PropertyGroup>
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
-  </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
+
 </Project>

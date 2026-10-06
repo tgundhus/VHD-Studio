@@ -11,7 +11,7 @@ namespace VhdAttachService {
         private AppService() {
             this.AutoLog = true;
             this.CanStop = true;
-            this.ServiceName = "VhdAttach";
+            this.ServiceName = VhdAttachCommon.Branding.ServiceName;
         }
 
         protected override void OnStart(string[] args) {

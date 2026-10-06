@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Configuration.Install;
 using System.Diagnostics;
-using System.Reflection;
 using System.ServiceProcess;
 using System.Windows.Forms;
 
@@ -26,32 +24,26 @@ namespace VhdAttachService {
             } else if (Medo.Application.Args.Current.ContainsKey("Install")) {
 
                 try {
-                    using (ServiceController sc = new ServiceController(AppService.Instance.ServiceName)) {
-                        if (sc.Status != ServiceControllerStatus.Stopped) { sc.Stop(); }
-                    }
-                } catch (Exception) { }
-
-                ManagedInstallerClass.InstallHelper(new string[] { Assembly.GetExecutingAssembly().Location });
-                System.Environment.Exit(0);
+                    ServiceInstaller.Install(Environment.ProcessPath);
+                    System.Environment.Exit(0);
+                } catch (Exception ex) {
+                    Trace.TraceError("Cannot install service: " + ex.Message);
+                    System.Environment.Exit(1);
+                }
 
             } else if (Medo.Application.Args.Current.ContainsKey("Uninstall")) {
 
                 try {
-                    using (ServiceController sc = new ServiceController(AppService.Instance.ServiceName)) {
-                        if (sc.Status != ServiceControllerStatus.Stopped) { sc.Stop(); }
-                    }
-                } catch (Exception) { }
-                try {
-                    ManagedInstallerClass.InstallHelper(new string[] { "/u", Assembly.GetExecutingAssembly().Location });
-                    System.Environment.Exit(0);
-                } catch (System.Configuration.Install.InstallException) { //no service with that name
+                    System.Environment.Exit(ServiceInstaller.Uninstall() ? 0 : 1);
+                } catch (Exception ex) { //no service with that name
+                    Trace.TraceError("Cannot uninstall service: " + ex.Message);
                     System.Environment.Exit(1);
                 }
 
             } else if (Medo.Application.Args.Current.ContainsKey("Start")) {
 
                 try {
-                    using (var service = new ServiceController("VhdAttach")) {
+                    using (var service = new ServiceController(AppService.Instance.ServiceName)) {
                         if (service.Status != ServiceControllerStatus.Running) {
                             service.Start();
                             service.WaitForStatus(ServiceControllerStatus.Running, new TimeSpan(0, 0, 1));

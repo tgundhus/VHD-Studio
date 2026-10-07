@@ -1,4 +1,4 @@
-﻿namespace VhdAttach {
+namespace VhdAttach {
     partial class AttachForm {
         /// <summary>
         /// Required designer variable.
@@ -66,12 +66,12 @@
             this.Controls.Add(this.StatusLabel);
             this.Controls.Add(this.progress);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
-            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Icon = VhdAttach.Ui.AppIcon;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.Name = "AttachForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "VHD Attach";
+            this.Text = "VHD Studio";
             this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.Form_FormClosed);
             this.Load += new System.EventHandler(this.Form_Load);
             this.Shown += new System.EventHandler(this.Form_Shown);

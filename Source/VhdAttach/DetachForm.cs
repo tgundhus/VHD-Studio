@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -41,7 +41,15 @@ namespace VhdAttach {
                     bw.ReportProgress(-1, iFile.Name);
 
                     Utility.FixServiceErrorsIfNeeded();
-                    var res = PipeClient.Detach(iFile.FullName);
+                    var res = PipeClient.Detach(iFile.FullName, false);
+                    while (res.IsInUse) { //files are open: never cut them off without asking
+                        var name = iFile.Name;
+                        var message = res.Message;
+                        var choice = (InUseChoice)this.Invoke((Func<InUseChoice>)(() => InUsePrompt.Ask(this, name, message)));
+                        if (choice == InUseChoice.Cancel) { break; }
+                        res = PipeClient.Detach(iFile.FullName, choice == InUseChoice.Force);
+                    }
+                    if (res.IsInUse) { continue; } //user cancelled; disk stays attached
                     if (res.IsError) {
                         this._exceptions.Add(new InvalidOperationException(iFile.Name, new Exception(res.Message)));
                     }

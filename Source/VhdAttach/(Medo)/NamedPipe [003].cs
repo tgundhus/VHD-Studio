@@ -91,7 +91,7 @@ namespace Medo.IO {
             if (NativeMethods.WaitNamedPipe(this.FullPipeName, NativeMethods.NMPWAIT_USE_DEFAULT_WAIT) == false) {
                 throw new IOException("Cannot find open named pipe.", new Win32Exception());
             }
-            this.SafeHandle = NativeMethods.CreateFile(this.FullPipeName, NativeMethods.GENERIC_READ | NativeMethods.GENERIC_WRITE, 0, System.IntPtr.Zero, NativeMethods.OPEN_EXISTING, NativeMethods.FILE_ATTRIBUTE_NORMAL, System.IntPtr.Zero);
+            this.SafeHandle = NativeMethods.CreateFile(this.FullPipeName, NativeMethods.GENERIC_READ | 0x00000002 /*FILE_WRITE_DATA*/, 0, System.IntPtr.Zero, NativeMethods.OPEN_EXISTING, NativeMethods.FILE_ATTRIBUTE_NORMAL | 0x00100000 /*SECURITY_SQOS_PRESENT*/ | 0x00020000 /*SECURITY_IMPERSONATION*/, System.IntPtr.Zero);
             if (this.SafeHandle.IsInvalid) { throw new IOException("Cannot open named pipe.", new Win32Exception()); }
         }
 

@@ -69,6 +69,22 @@ namespace VhdAttachCommon {
             }
         }
 
+        /// <summary>
+        /// Mounts volume into an empty NTFS folder (e.g. C:\Mounts\Data).
+        /// </summary>
+        /// <param name="folder">Existing empty folder on an NTFS/ReFS volume.</param>
+        public void AddMountFolder(string folder) {
+            if (string.IsNullOrEmpty(folder)) { throw new ArgumentNullException(nameof(folder)); }
+            var mountPoint = folder.EndsWith("\\", StringComparison.Ordinal) ? folder : folder + "\\";
+            if (!System.IO.Directory.Exists(mountPoint)) { throw new System.IO.DirectoryNotFoundException(string.Format(CultureInfo.InvariantCulture, "Mount folder \"{0}\" does not exist.", folder)); }
+            if (System.IO.Directory.GetFileSystemEntries(mountPoint).Length > 0) {
+                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Mount folder \"{0}\" is not empty.", folder));
+            }
+            if (NativeMethods.SetVolumeMountPoint(mountPoint, this.VolumeName) == false) {
+                throw new Win32Exception();
+            }
+        }
+
 
         private int? _physicalDriveNumber;
         public int? PhysicalDriveNumber {

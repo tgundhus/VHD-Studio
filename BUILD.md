@@ -1,25 +1,52 @@
-### Building Project ###
+### Building VHD Studio ###
 
-First step would be to get current version of code from [GitHub](https://github.com/medo64/vhdattach).
+#### Requirements ####
 
-After that you can download and install required tools.
-
-
-#### Required Tools ####
-
-* [Visual Studio Express 2013 for Windows Desktop](http://www.visualstudio.com/downloads/download-visual-studio-vs#d-express-windows-desktop)
-* [Inno setup](http://www.jrsoftware.org/isinfo.php)
-* [Sign tool](http://msdn.microsoft.com/en-us/library/windows/desktop/aa387764.aspx)
+* [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). Visual Studio is optional;
+  any editor and `dotnet` work.
+* [Inno Setup 6](https://jrsoftware.org/isinfo.php), only needed for the installer.
+* Windows SDK `signtool.exe`, only needed for code signing.
 
 
-#### Script Modifications ####
+#### Build and test ####
 
-In `Publish.cmd` check location of Visual Studio (`COMPILE_TOOL` variable) and
-location of Sign Tool (`SIGN_TOOL` variable).
+    dotnet build Source\VhdStudio.sln
+    dotnet test  Source\VhdStudio.sln
 
-In case you have certificate that you want to use for signing, update it also
-(`SIGN_HASH` variable). In case you don't have a certificate, it is ok, script
-will just avoid signing executables.
+Some tests create a small temporary VHDX and read the local disk layout (read-only). They need
+no administrator rights.
 
-After this you can start script and it will compile project and make its setup.
-Executables will be in `Binaries` directory and setup will be in `Releases`.
+
+#### Run from source ####
+
+    dotnet run --project Source\VhdAttach
+
+Attaching goes through the Windows service. To test the service without installing it, run
+`VhdStudioService.exe /Interactive` from an elevated prompt. Maintenance and Disk Manager
+changes ask for elevation themselves.
+
+
+#### Installer ####
+
+    Setup\Publish.ps1                                  # test, publish to .\Publish, build installer
+    Setup\Publish.ps1 -SkipInstaller                   # binaries only
+    Setup\Publish.ps1 -CertificateThumbprint <sha1>    # also sign executables and setup
+
+The installer is written to `Releases\vhdstudio-<version>-setup.exe`. Set the version in
+`Source\Directory.Build.props`.
+
+
+#### Continuous integration ####
+
+`.github/workflows/build.yml` builds, tests and packages every push. Pushing a tag such as
+`v5.0.0` creates a GitHub release with the installer attached.
+
+
+#### Project layout ####
+
+| Path | Contents |
+|---|---|
+| `Source/VhdAttach` | `VhdStudio.exe`: the UI, Maintenance window (`MaintenanceForm.cs`) and Disk Manager (`Storage/`) |
+| `Source/VhdAttach-Service` | `VhdStudioService.exe`: attach/detach and auto-mount service. Also holds code shared with the UI (`VirtualDiskImage.cs`, `VhdxHeader.cs`, `Branding.cs`) |
+| `Source/VhdAttach-Test` | MSTest unit and integration tests |
+| `Setup` | Inno Setup script and publish script |

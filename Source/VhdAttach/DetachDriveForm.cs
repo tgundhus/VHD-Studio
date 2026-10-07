@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
@@ -41,13 +41,21 @@ namespace VhdAttach {
                     bw.ReportProgress(-1, iDirectory.Name);
 
                     Utility.FixServiceErrorsIfNeeded();
-                    var res = PipeClient.DetachDrive(iDirectory.FullName);
+                    var res = PipeClient.DetachDrive(iDirectory.FullName, false);
+                    while (res.IsInUse) { //files are open: never cut them off without asking
+                        var name = iDirectory.Name;
+                        var message = res.Message;
+                        var choice = (InUseChoice)this.Invoke((Func<InUseChoice>)(() => InUsePrompt.Ask(this, name, message)));
+                        if (choice == InUseChoice.Cancel) { break; }
+                        res = PipeClient.DetachDrive(iDirectory.FullName, choice == InUseChoice.Force);
+                    }
+                    if (res.IsInUse) { continue; } //user cancelled; disk stays attached
                     if (res.IsError) {
                         this._exceptions.Add(new InvalidOperationException(iDirectory.Name, new Exception(res.Message)));
                     }
                 }
             } catch (TimeoutException) {
-                this._exceptions.Add(new InvalidOperationException(iDirectory.Name, new Exception("Cannot access VHD Attach service.")));
+                this._exceptions.Add(new InvalidOperationException(iDirectory.Name, new Exception(Messages.ServiceIOException)));
             } catch (Exception ex) {
                 this._exceptions.Add(new InvalidOperationException(iDirectory.Name, ex));
             }

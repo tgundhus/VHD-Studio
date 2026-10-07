@@ -31,3 +31,4 @@ Temporary/**
 *.vspscc
 *.vssscc
 *.zip
+Publish/**

@@ -7,7 +7,7 @@ using System.Windows.Forms;
 namespace VhdAttach {
     internal partial class ServiceWaitForm : Form {
 
-        public ServiceWaitForm(string title, CrossAppDomainDelegate action) {
+        public ServiceWaitForm(string title, Action action) {
             InitializeComponent();
             this.Font = SystemFonts.MessageBoxFont;
             this.ControlBox = false;

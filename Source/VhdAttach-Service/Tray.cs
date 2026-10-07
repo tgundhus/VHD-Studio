@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
@@ -10,33 +10,34 @@ namespace VhdAttachService {
     internal static class Tray {
 
         private static NotifyIcon Notify;
+        private static readonly string ResourcePrefix = typeof(Tray).Namespace + ".Resources.";
 
         internal static void Show() {
             Tray.Notify = new NotifyIcon();
-            Tray.Notify.ContextMenu = new ContextMenu();
-            Tray.Notify.ContextMenu.MenuItems.Add(new MenuItem("Exit", Tray_Exit_OnClick));
+            Tray.Notify.ContextMenuStrip = new ContextMenuStrip();
+            Tray.Notify.ContextMenuStrip.Items.Add("Exit", null, Tray_Exit_OnClick);
             Tray.Notify.Icon = GetApplicationIcon();
             Tray.Notify.Text = Medo.Reflection.CallingAssembly.Title;
             Tray.Notify.Visible = true;
         }
 
         internal static void SetStatusToRunningInteractive() {
-            Tray.Notify.Icon = GetAnnotatedIcon(Image.FromStream(Assembly.GetExecutingAssembly().GetManifestResourceStream(Medo.Reflection.CallingAssembly.Name + ".Resources.Service_RunningInteractive_12.png")));
+            Tray.Notify.Icon = GetAnnotatedIcon(Image.FromStream(Assembly.GetExecutingAssembly().GetManifestResourceStream(ResourcePrefix + "Service_RunningInteractive_12.png")));
             Tray.Notify.Text = Medo.Reflection.CallingAssembly.Title + " (PID=" + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + ")";
         }
 
         internal static void SetStatusToUnknown() {
-            Tray.Notify.Icon = GetAnnotatedIcon(Image.FromStream(Assembly.GetExecutingAssembly().GetManifestResourceStream(Medo.Reflection.CallingAssembly.Name + ".Resources.Service_Unknown_12.png")));
+            Tray.Notify.Icon = GetAnnotatedIcon(Image.FromStream(Assembly.GetExecutingAssembly().GetManifestResourceStream(ResourcePrefix + "Service_Unknown_12.png")));
             Tray.Notify.Text = Medo.Reflection.CallingAssembly.Title + " - Unknown state.";
         }
 
         internal static void SetStatusToRunning() {
-            Tray.Notify.Icon = GetAnnotatedIcon(Image.FromStream(Assembly.GetExecutingAssembly().GetManifestResourceStream(Medo.Reflection.CallingAssembly.Name + ".Resources.Service_Running_12.png")));
+            Tray.Notify.Icon = GetAnnotatedIcon(Image.FromStream(Assembly.GetExecutingAssembly().GetManifestResourceStream(ResourcePrefix + "Service_Running_12.png")));
             Tray.Notify.Text = Medo.Reflection.CallingAssembly.Title + " - Running.";
         }
 
         internal static void SetStatusToStopped() {
-            Tray.Notify.Icon = GetAnnotatedIcon(Image.FromStream(Assembly.GetExecutingAssembly().GetManifestResourceStream(Medo.Reflection.CallingAssembly.Name + ".Resources.Service_Stopped_12.png")));
+            Tray.Notify.Icon = GetAnnotatedIcon(Image.FromStream(Assembly.GetExecutingAssembly().GetManifestResourceStream(ResourcePrefix + "Service_Stopped_12.png")));
             Tray.Notify.Text = Medo.Reflection.CallingAssembly.Title + " - Stopped.";
         }
 
@@ -70,7 +71,7 @@ namespace VhdAttachService {
         }
 
         private static Icon GetApplicationIcon() {
-            IntPtr hLibrary = NativeMethods.LoadLibrary(Assembly.GetEntryAssembly().Location);
+            IntPtr hLibrary = NativeMethods.LoadLibrary(Environment.ProcessPath);
             if (!hLibrary.Equals(IntPtr.Zero)) {
                 IntPtr hIcon = NativeMethods.LoadImage(hLibrary, "#32512", NativeMethods.IMAGE_ICON, 20, 20, 0);
                 if (!hIcon.Equals(System.IntPtr.Zero)) {

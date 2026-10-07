@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
@@ -44,7 +44,7 @@ namespace VhdAttach {
 
                 var filter = isFormatVhdX ? "Virtual disk files (*.vhdx)|*.vhdx|All files (*.*)|*.*" : "Virtual disk files (*.vhd)|*.vhd|All files (*.*)|*.*";
 
-                using (var frm = new SaveFileDialog() { AddExtension = true, AutoUpgradeEnabled = true, Filter = filter, FilterIndex = 0, OverwritePrompt = true, Title = "New disk", ValidateNames = true }) {
+                using (var frm = new SaveFileDialog() { AddExtension = true, AutoUpgradeEnabled = true, Filter = filter, FilterIndex = 0, OverwritePrompt = false, Title = "New disk", ValidateNames = true }) {
                     if (frm.ShowDialog(this) == DialogResult.OK) {
                         this.FileName = frm.FileName;
                     } else {
@@ -71,15 +71,9 @@ namespace VhdAttach {
                 } catch (ArgumentException) { }
 
 
-                try {
-                    File.Delete(this.FileName);
-                } catch (IOException ex) {
+                if (File.Exists(this.FileName)) { //never replace an existing file; it may be a disk full of data
                     this.Cursor = Cursors.Default;
-                    Medo.MessageBox.ShowError(this, "File cannot be deleted.\n\n" + ex.Message);
-                    return;
-                } catch (UnauthorizedAccessException ex) {
-                    this.Cursor = Cursors.Default;
-                    Medo.MessageBox.ShowError(this, "File cannot be deleted.\n\n" + ex.Message);
+                    Medo.MessageBox.ShowWarning(this, string.Format("\"{0}\" already exists.\n\nVHD Studio never replaces existing files. Choose a new name, or rename or delete the existing file yourself.", Path.GetFileName(this.FileName)));
                     return;
                 }
 

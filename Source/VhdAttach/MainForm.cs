@@ -51,6 +51,51 @@ namespace VhdAttach {
             }
 
             this.Recent = new Medo.Configuration.RecentFiles();
+
+            this.Controls.Add(new Ui.Banner(Branding.ProductName, "Attach, maintain and partition VHD, VHDX and ISO images") { Font = this.Font });
+            this.AddStudioMenu();
+        }
+
+
+        private ToolStripSplitButton mnuMaintenance;
+        private ToolStripButton mnuDiskManager;
+
+        private void AddStudioMenu() {
+            var size = mnu.ImageScalingSize.Width;
+            this.mnuMaintenance = new ToolStripSplitButton("Maintenance", Ui.GetGlyph(Ui.Glyph.Wrench, size, Ui.AccentDark)) { Enabled = false, ToolTipText = "Compact, resize, convert, merge and repair (Alt+T)" };
+            this.mnuMaintenance.ButtonClick += (s, e) => this.OpenMaintenance("Compact");
+            foreach (var task in MaintenanceForm.TaskNames) {
+                var taskName = task;
+                this.mnuMaintenance.DropDownItems.Add(task == "Differencing" ? "Create differencing disk…" : (task == "Merge" ? "Merge into parent…" : task + "…"), null, (s, e) => this.OpenMaintenance(taskName));
+            }
+            this.mnuDiskManager = new ToolStripButton("Disk Manager", Ui.GetGlyph(Ui.Glyph.Disk, size, Ui.AccentDark), (s, e) => this.OpenDiskManager()) { ToolTipText = "DiskPart-style partition tools (Ctrl+D)" };
+            var index = mnu.Items.IndexOf(mnuDrive) + 1;
+            mnu.Items.Insert(index, new ToolStripSeparator());
+            mnu.Items.Insert(index + 1, this.mnuMaintenance);
+            mnu.Items.Insert(index + 2, this.mnuDiskManager);
+        }
+
+        private void OpenMaintenance(string task) {
+            if (this.VhdFileName == null) { return; }
+            using (var form = new MaintenanceForm(this.VhdFileName, task)) {
+                form.ShowDialog(this);
+            }
+            UpdateData(this.VhdFileName);
+        }
+
+        private void OpenDiskManager() {
+            int? diskNumber = null;
+            try {
+                if (this.VhdFileName != null) {
+                    var attachedPath = VirtualDiskImage.GetDetails(this.VhdFileName).AttachedPath; //\\.\PhysicalDriveN
+                    var digits = attachedPath?.Substring(attachedPath.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9').Length);
+                    if (int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)) { diskNumber = number; }
+                }
+            } catch (Exception) { }
+            using (var form = new Storage.DiskManagerForm(diskNumber)) {
+                form.ShowDialog(this);
+            }
+            if (this.VhdFileName != null) { UpdateData(this.VhdFileName); }
         }
 
 
@@ -110,6 +155,14 @@ namespace VhdAttach {
                     mnuRefresh.PerformClick();
                     return true;
 
+                case Keys.Alt | Keys.T:
+                    if (this.mnuMaintenance.Enabled) { this.mnuMaintenance.ShowDropDown(); }
+                    return true;
+
+                case Keys.Control | Keys.D:
+                    this.mnuDiskManager.PerformClick();
+                    return true;
+
 
                 case Keys.Control | Keys.C:
                     mnxListCopy.PerformClick();
@@ -165,7 +218,7 @@ namespace VhdAttach {
 
         private void Form_Resize(object sender, EventArgs e) {
             using (var listGraphics = list.CreateGraphics()) {
-                var x = listGraphics.MeasureString("XxWwAaZz ��QqXxWw", list.Font).ToSize();
+                var x = listGraphics.MeasureString("XxWwAaZz ��QqXxWw", list.Font).ToSize();
                 list.Columns[0].Width = x.Width;
             }
             list.Columns[1].Width = list.ClientSize.Width - list.Columns[0].Width - SystemInformation.VerticalScrollBarWidth;
@@ -186,6 +239,7 @@ namespace VhdAttach {
                 mnuDetach.Enabled = false;
                 mnuAutomount.Enabled = false;
                 mnuDrive.Enabled = false;
+                this.mnuMaintenance.Enabled = false;
                 mnuAutomount_DropDownOpening(null, null);
                 mnuDrive_DropDownOpening(null, null);
                 return;
@@ -272,6 +326,31 @@ namespace VhdAttach {
                         } catch { }
 
                         try {
+                            var details = VirtualDiskImage.GetDetails(vhdFileName);
+                            if (details.Kind != VirtualDiskKind.Unknown) {
+                                items.Add(new ListViewItem(new string[] { "Disk type", details.Kind.ToString() }) { Group = GroupDetails });
+                            }
+                            if (details.FragmentationPercentage.HasValue) {
+                                items.Add(new ListViewItem(new string[] { "Fragmentation", details.FragmentationPercentage.Value.ToString(CultureInfo.CurrentCulture) + " %" }) { Group = GroupDetails });
+                            }
+                            if (details.SmallestSafeVirtualSize.HasValue) {
+                                items.Add(new ListViewItem(new string[] { "Smallest safe size", Ui.FormatSize(details.SmallestSafeVirtualSize.Value) }) { Group = GroupDetails });
+                            }
+                            if (details.PhysicalSectorSize.HasValue) {
+                                items.Add(new ListViewItem(new string[] { "Physical sector size", details.PhysicalSectorSize.Value.ToString(CultureInfo.CurrentCulture) + " bytes" }) { Group = GroupDetails });
+                            }
+                            for (int i = 0; i < details.ParentLocations.Count; i++) {
+                                items.Add(new ListViewItem(new string[] { (i == 0) ? "Parent" : "", details.ParentLocations[i] }) { Group = GroupDetails, ForeColor = (details.ParentResolved == false) ? Ui.Danger : SystemColors.WindowText });
+                            }
+                            if (details.ParentResolved == false) {
+                                items.Add(new ListViewItem(new string[] { "", "Parent not found - use Maintenance → Repair → Fix parent path" }) { Group = GroupDetails, ForeColor = Ui.Danger });
+                            }
+                            if (details.NeedsLogReplay) {
+                                items.Insert(0, new ListViewItem(new string[] { "Warning", "Pending VHDX log (unclean shutdown). Attach replays it automatically, or use Maintenance → Repair." }) { Group = GroupFileSystem, ForeColor = Ui.Danger });
+                            }
+                        } catch { }
+
+                        try {
                             items.Add(new ListViewItem(new string[] { "Provider subtype", string.Format(CultureInfo.CurrentCulture, "{0} (0x{0:x8})", document.GetProviderSubtype()) }) { Group = GroupDetails });
                         } catch { }
 
@@ -282,10 +361,10 @@ namespace VhdAttach {
                                 var headerBytes = new byte[1024];
                                 var footerBytes = new byte[512];
                                 using (var vhdFile = new FileStream(vhdFileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
-                                    vhdFile.Read(footerCopyBytes, 0, 512);
-                                    vhdFile.Read(headerBytes, 0, 1024);
+                                    vhdFile.ReadExactly(footerCopyBytes, 0, 512);
+                                    vhdFile.ReadExactly(headerBytes, 0, 1024);
                                     vhdFile.Position = vhdFile.Length - 512;
-                                    vhdFile.Read(footerBytes, 0, 512);
+                                    vhdFile.ReadExactly(footerBytes, 0, 512);
                                 }
 
                                 var footer = new HardDiskFooter(footerBytes);
@@ -298,7 +377,7 @@ namespace VhdAttach {
 
                                 var creatorApplicationText = string.Format(CultureInfo.InvariantCulture, "Unknown (0x{0:x4})", (int)footer.CreatorApplication);
                                 switch (footer.CreatorApplication) {
-                                    case VhdCreatorApplication.JosipMedvedVhdAttach: creatorApplicationText = "Josip Medved's VHD Attach"; break;
+                                    case VhdCreatorApplication.JosipMedvedVhdAttach: creatorApplicationText = "VHD Attach / VHD Studio"; break;
                                     case VhdCreatorApplication.MicrosoftSysinternalsDisk2Vhd: creatorApplicationText = "Microsoft Sysinternals Disk2vhd"; break;
                                     case VhdCreatorApplication.MicrosoftVirtualPC: creatorApplicationText = "Microsoft Virtual PC"; break;
                                     case VhdCreatorApplication.MicrosoftVirtualServer: creatorApplicationText = "Microsoft Virtual Server"; break;
@@ -353,6 +432,7 @@ namespace VhdAttach {
                         mnuDetach.Enabled = !mnuAttach.Enabled;
                         mnuAutomount.Enabled = true;
                         mnuDrive.Enabled = true;
+                        this.mnuMaintenance.Enabled = (document.DiskType != Medo.IO.VirtualDiskType.Iso);
                         mnuAutomount_DropDownOpening(null, null);
                         mnuDrive_DropDownOpening(null, null);
 
@@ -496,63 +576,33 @@ namespace VhdAttach {
         private void mnuAttach_ButtonClick(object sender, EventArgs e) {
             if (this.VhdFileName == null) { return; }
 
-            if (Settings.UseService) {
-                using (var form = new AttachForm(new FileInfo(this.VhdFileName), false, false)) {
-                    form.StartPosition = FormStartPosition.CenterParent;
-                    form.ShowDialog(this);
-                }
-                UpdateData(this.VhdFileName);
-            } else {
-                mnu.Enabled = false;
-                var exe = Path.Combine(new FileInfo(Assembly.GetExecutingAssembly().Location).Directory.FullName, "VhdAttachExecutor.exe");
-                var startInfo = Utility.GetProcessStartInfo(exe, @"/Attach """ + this.VhdFileName + @"""");
-                this.Cursor = Cursors.WaitCursor;
-                bwExecutor.RunWorkerAsync(startInfo);
+            using (var form = new AttachForm(new FileInfo(this.VhdFileName), false, false)) {
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog(this);
             }
+            UpdateData(this.VhdFileName);
             AllowSetForegroundWindowToExplorer();
         }
 
         private void mnuAttachReadOnly_Click(object sender, EventArgs e) {
             if (this.VhdFileName == null) { return; }
 
-            if (Settings.UseService) {
-                using (var form = new AttachForm(new FileInfo(this.VhdFileName), true, false)) {
-                    form.StartPosition = FormStartPosition.CenterParent;
-                    form.ShowDialog(this);
-                }
-                UpdateData(this.VhdFileName);
-            } else {
-                mnu.Enabled = false;
-                var exe = Path.Combine(new FileInfo(Assembly.GetExecutingAssembly().Location).Directory.FullName, "VhdAttachExecutor.exe");
-                var startInfo = Utility.GetProcessStartInfo(exe, @"/Attach """ + this.VhdFileName + @""" /ReadOnly");
-                this.Cursor = Cursors.WaitCursor;
-                bwExecutor.RunWorkerAsync(startInfo);
+            using (var form = new AttachForm(new FileInfo(this.VhdFileName), true, false)) {
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog(this);
             }
+            UpdateData(this.VhdFileName);
             AllowSetForegroundWindowToExplorer();
         }
 
         private void mnuDetach_Click(object sender, EventArgs e) {
             if (this.VhdFileName == null) { return; }
 
-            if (Settings.UseService) {
-
-                using (var form = new DetachForm(new FileInfo[] { new FileInfo(this.VhdFileName) })) {
-                    form.StartPosition = FormStartPosition.CenterParent;
-                    form.ShowDialog(this);
-                }
-                UpdateData(this.VhdFileName);
-
-            } else {
-
-                mnu.Enabled = false;
-
-                var exe = Path.Combine(new FileInfo(Assembly.GetExecutingAssembly().Location).Directory.FullName, "VhdAttachExecutor.exe");
-                var startInfo = Utility.GetProcessStartInfo(exe, @"/Detach """ + this.VhdFileName + @"""");
-
-                this.Cursor = Cursors.WaitCursor;
-                bwExecutor.RunWorkerAsync(startInfo);
-
+            using (var form = new DetachForm(new FileInfo[] { new FileInfo(this.VhdFileName) })) {
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog(this);
             }
+            UpdateData(this.VhdFileName);
         }
 
 
@@ -560,7 +610,7 @@ namespace VhdAttach {
             bool isAutoMountNormal = false;
             bool isAutoMountReadonly = false;
             foreach (var fwo in ServiceSettings.AutoAttachVhdList) {
-                if (string.Compare(this.VhdFileName, fwo.FileName, StringComparison.OrdinalIgnoreCase) == 0) {
+                if ((this.VhdFileName != null) && ((string.Compare(this.VhdFileName, fwo.FileName, StringComparison.OrdinalIgnoreCase) == 0) || (string.Compare(PathHelper.ToServicePath(this.VhdFileName), fwo.FileName, StringComparison.OrdinalIgnoreCase) == 0))) {
                     isAutoMountNormal = !fwo.ReadOnly;
                     isAutoMountReadonly = fwo.ReadOnly;
                     break;
@@ -605,7 +655,7 @@ namespace VhdAttach {
         private void mnuAutomountNormal_Click(object sender, EventArgs e) {
             var list = new FileWithOptionsCollection(ServiceSettings.AutoAttachVhdList);
             list.Remove(this.VhdFileName);
-            list.Add(new FileWithOptions(this.VhdFileName));
+            list.Add(new FileWithOptions(PathHelper.ToServicePath(this.VhdFileName)));
             SaveAutomountSettings(list);
             mnuAutomount_DropDownOpening(null, null);
         }
@@ -613,7 +663,7 @@ namespace VhdAttach {
         private void mnuAutomountReadonly_Click(object sender, EventArgs e) {
             var list = new FileWithOptionsCollection(ServiceSettings.AutoAttachVhdList);
             list.Remove(this.VhdFileName);
-            list.Add(new FileWithOptions(this.VhdFileName) { ReadOnly = true });
+            list.Add(new FileWithOptions(PathHelper.ToServicePath(this.VhdFileName)) { ReadOnly = true });
             SaveAutomountSettings(list);
             mnuAutomount_DropDownOpening(null, null);
         }
@@ -748,7 +798,7 @@ namespace VhdAttach {
         }
 
         private void mnuAppUpgrade_Click(object sender, EventArgs e) {
-            Medo.Services.Upgrade.ShowDialog(this, new Uri("https://medo64.com/upgrade/"));
+            Feedback.OpenReleases();
         }
 
         private void mnuAppAbout_Click(object sender, EventArgs e) {
@@ -756,11 +806,11 @@ namespace VhdAttach {
         }
 
         private void mnuHelpReportABug_Click(object sender, EventArgs e) {
-            Medo.Diagnostics.ErrorReport.ShowDialog(this, null, new Uri("https://medo64.com/feedback/"));
+            Feedback.ReportIssue();
         }
 
         private void mnuHelpAbout_Click(object sender, EventArgs e) {
-            Medo.Windows.Forms.AboutBox.ShowDialog(this, new Uri("https://www.medo64.com/vhdattach/"));
+            Medo.Windows.Forms.AboutBox.ShowDialog(this, new Uri(Branding.ProjectUrl));
         }
 
         #endregion
@@ -995,7 +1045,7 @@ namespace VhdAttach {
             staErrorServiceMissing.Visible = false;
             staErrorServiceNotRunning.Visible = false;
 
-            using (var service = new ServiceController("VhdAttach")) {
+            using (var service = new ServiceController(Branding.ServiceName)) {
                 try {
                     if (service.Status != ServiceControllerStatus.Running) {
                         staErrorServiceNotRunning.Visible = true;
@@ -1029,17 +1079,20 @@ namespace VhdAttach {
                 if (bwCheckForUpgrade.CancellationPending) { return; }
             }
 
-            var file = Medo.Services.Upgrade.GetUpgradeFile(new Uri("https://medo64.com/upgrade/"));
-            if (file != null) {
-                if (bwCheckForUpgrade.CancellationPending) { return; }
-                e.Cancel = false;
+            using (var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15))) {
+                var newerRelease = Feedback.GetNewerReleaseAsync(cancellation.Token).GetAwaiter().GetResult();
+                if (newerRelease != null) {
+                    if (bwCheckForUpgrade.CancellationPending) { return; }
+                    e.Result = newerRelease;
+                    e.Cancel = false;
+                }
             }
         }
 
         private void bwCheckForUpgrade_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e) {
             if (!e.Cancelled && (e.Error == null)) {
                 Helper.UpdateToolstripImage(mnuApp, "mnuAppUpgrade");
-                mnuAppUpgrade.Text = "Upgrade is available";
+                mnuAppUpgrade.Text = "Update available (" + e.Result + ")";
             }
         }
 

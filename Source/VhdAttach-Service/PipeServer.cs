@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -11,10 +12,16 @@ using VhdAttachCommon;
 namespace VhdAttachService {
     internal static class PipeServer {
 
-        public static Medo.IO.NamedPipe Pipe = new Medo.IO.NamedPipe("JosipMedved-VhdAttach-Commands");
+        public static Medo.IO.NamedPipe Pipe = new Medo.IO.NamedPipe(Branding.PipeName);
+
+        /// <summary>
+        /// Network logons denied; SYSTEM/Administrators full; authenticated local users may read and write data only
+        /// (no FILE_CREATE_PIPE_INSTANCE, so nobody else can serve this pipe name).
+        /// </summary>
+        private const string PipeSecurity = "D:P(D;;GA;;;NU)(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x12018b;;;AU)";
 
         public static void Start() {
-            Pipe.CreateWithFullAccess();
+            Pipe.CreateSecure(PipeSecurity); //remote clients rejected; first instance only (no squatting)
         }
 
         public static TinyPacket Receive() {
@@ -25,19 +32,26 @@ namespace VhdAttachService {
 
             var packet = TinyPacket.Parse(buffer);
             if (packet != null) {
-                if (packet.Product != "VhdAttach") { return null; }
+                if (packet.Product != Branding.PacketProduct) { return null; }
+                PipeCaller caller = null;
+                try {
+                    caller = PipeCaller.FromPipe(Pipe.GetHandle());
+                } catch (Win32Exception ex) {
+                    return GetResponse(packet, new InvalidOperationException("Cannot identify the calling user.", ex));
+                }
+                using (caller)
                 try {
                     switch (packet.Operation) {
                         case "Attach":
-                            ReceivedAttach(packet);
+                            ReceivedAttach(packet, caller);
                             return GetResponse(packet);
 
                         case "Detach":
-                            ReceivedDetach(packet);
+                            ReceivedDetach(packet, caller);
                             return GetResponse(packet);
 
                         case "DetachDrive":
-                            ReceivedDetachDrive(packet);
+                            ReceivedDetachDrive(packet, caller);
                             return GetResponse(packet);
 
                         case "WriteContextMenuVhdSettings":
@@ -49,7 +63,7 @@ namespace VhdAttachService {
                             return GetResponse(packet);
 
                         case "WriteAutoAttachSettings":
-                            ReceivedWriteAutoAttachSettings(packet);
+                            ReceivedWriteAutoAttachSettings(packet, caller);
                             return GetResponse(packet);
 
                         case "RegisterExtensionVhd":
@@ -61,7 +75,7 @@ namespace VhdAttachService {
                             return GetResponse(packet);
 
                         case "ChangeDriveLetter":
-                            ReceivedChangeDriveLetter(packet);
+                            ReceivedChangeDriveLetter(packet, caller);
                             return GetResponse(packet);
 
                         default: throw new InvalidOperationException("Unknown command.");
@@ -76,48 +90,39 @@ namespace VhdAttachService {
 
 
 
-        private static void ReceivedAttach(TinyPacket packet) {
+        private static void ReceivedAttach(TinyPacket packet, PipeCaller caller) {
             try {
-                var path = packet["Path"];
-                var isReadOnly = packet["MountReadOnly"].Equals("True", StringComparison.OrdinalIgnoreCase);
+                var file = new FileWithOptions(packet["Path"]) {
+                    ReadOnly = packet["MountReadOnly"].Equals("True", StringComparison.OrdinalIgnoreCase),
+                    NoDriveLetter = string.Equals(packet["NoDriveLetter"], "True", StringComparison.OrdinalIgnoreCase),
+                    MountFolder = string.IsNullOrEmpty(packet["MountFolder"]) ? null : packet["MountFolder"],
+                };
                 var shouldInitialize = packet["InitializeDisk"].Equals("True", StringComparison.OrdinalIgnoreCase);
-                string diskPath = null;
-                using (var disk = new Medo.IO.VirtualDisk(path)) {
-                    var access = Medo.IO.VirtualDiskAccessMask.All;
-                    var options = Medo.IO.VirtualDiskAttachOptions.PermanentLifetime;
-                    if (isReadOnly) {
-                        if (shouldInitialize == false) {
-                            access = Medo.IO.VirtualDiskAccessMask.AttachReadOnly;
-                        }
-                        options |= Medo.IO.VirtualDiskAttachOptions.ReadOnly;
-                    }
-                    disk.Open(access);
-                    disk.Attach(options);
-                    if (shouldInitialize) { diskPath = disk.GetAttachedPath(); }
-                }
-                if (shouldInitialize) {
-                    DiskIO.InitializeDisk(diskPath);
-                }
+                AuditLog.Started("Attach", file.ToString(), shouldInitialize ? "initialize new disk" : null, caller.Name);
+                AttachHelper.Attach(file, caller, shouldInitialize);
+                AuditLog.Succeeded("Attach", file.ToString(), null, caller.Name);
             } catch (Exception ex) {
+                AuditLog.Failed("Attach", packet["Path"], ex, caller.Name);
                 throw new InvalidOperationException(string.Format("Virtual disk file \"{0}\" cannot be attached.", (new FileInfo(packet["Path"])).Name), ex);
             }
         }
 
-        private static void ReceivedDetach(TinyPacket packet) {
+        private static void ReceivedDetach(TinyPacket packet, PipeCaller caller) {
             try {
                 var path = packet["Path"];
-                using (var disk = new Medo.IO.VirtualDisk(path)) {
-                    disk.Open(Medo.IO.VirtualDiskAccessMask.Detach);
-                    disk.Detach();
-                }
+                var force = string.Equals(packet["Force"], "True", StringComparison.OrdinalIgnoreCase);
+                AuditLog.Started("Detach", path, force ? "force" : null, caller.Name);
+                AttachHelper.Detach(path, force, caller);
+                AuditLog.Succeeded("Detach", path, null, caller.Name);
             } catch (Exception ex) {
+                AuditLog.Failed("Detach", packet["Path"], ex, caller.Name);
                 throw new InvalidOperationException(string.Format("Virtual disk file \"{0}\" cannot be detached.", (new FileInfo(packet["Path"])).Name), ex);
             }
         }
 
-        private static void ReceivedDetachDrive(TinyPacket packet) {
+        private static void ReceivedDetachDrive(TinyPacket packet, PipeCaller caller) {
             try {
-                DetachDrive(packet["Path"]);
+                DetachDrive(packet["Path"], caller, string.Equals(packet["Force"], "True", StringComparison.OrdinalIgnoreCase));
             } catch (Exception ex) {
                 throw new InvalidOperationException(string.Format("Drive \"{0}\" cannot be detached.", packet["Path"]), ex);
             }
@@ -147,9 +152,29 @@ namespace VhdAttachService {
             }
         }
 
-        private static void ReceivedWriteAutoAttachSettings(TinyPacket packet) {
+        private static void ReceivedWriteAutoAttachSettings(TinyPacket packet, PipeCaller caller) {
             try {
-                ServiceSettings.AutoAttachVhdList = GetFwoArray(packet["AutoAttachList"]);
+                var oldList = ServiceSettings.AutoAttachVhdList;
+                var newList = GetFwoArray(packet["AutoAttachList"]);
+                foreach (var fwo in newList) { //anything new or changed must be accessible to the caller
+                    if (!Array.Exists(oldList, x => string.Equals(x.ToString(), fwo.ToString(), StringComparison.OrdinalIgnoreCase))) {
+                        using (caller.GuardFile(fwo.FileName, fwo.ReadOnly ? FileAccess.Read : FileAccess.ReadWrite, strictPaths: true)) { }
+                    }
+                }
+                foreach (var fwo in oldList) { //cannot remove other users' entries for files that still exist
+                    if (!Array.Exists(newList, x => string.Equals(x.FileName, fwo.FileName, StringComparison.OrdinalIgnoreCase)) && File.Exists(fwo.FileName)) {
+                        using (caller.GuardFile(fwo.FileName, FileAccess.Read)) { }
+                    }
+                }
+                foreach (var fwo in newList) {
+                    if (!string.IsNullOrEmpty(fwo.MountFolder) && !Array.Exists(oldList, x => string.Equals(x.ToString(), fwo.ToString(), StringComparison.OrdinalIgnoreCase))) {
+                        using (caller.GuardMountFolder(fwo.MountFolder)) { }
+                    }
+                }
+                ServiceSettings.AutoAttachVhdList = newList;
+                AuditLog.Succeeded("Auto-mount list", string.Join(" | ", Array.ConvertAll(newList, x => x.ToString())), null, caller.Name);
+            } catch (UnauthorizedAccessException ex) {
+                throw new InvalidOperationException("Auto-attach list cannot be written.", ex);
             } catch (Exception ex) {
                 Medo.Diagnostics.ErrorReport.SaveToTemp(ex);
                 throw new InvalidOperationException("Auto-attach list cannot be written.", ex);
@@ -174,9 +199,14 @@ namespace VhdAttachService {
             }
         }
 
-        private static void ReceivedChangeDriveLetter(TinyPacket packet) {
+        private static void ReceivedChangeDriveLetter(TinyPacket packet, PipeCaller caller) {
             try {
                 var volume = new Volume(packet["VolumeName"]);
+                if (!caller.IsAdministrator) { //non-admins may only re-letter volumes of virtual disks they can access
+                    var backingFile = GetVirtualDiskFile(volume.PhysicalDriveNumber);
+                    if (backingFile == null) { throw new UnauthorizedAccessException("Only volumes on virtual disks can be changed without administrator rights."); }
+                    using (caller.GuardFile(backingFile, FileAccess.Read)) { }
+                }
                 var newDriveLetter = packet["NewDriveLetter"];
                 if (string.IsNullOrEmpty(newDriveLetter)) {
                     volume.RemoveLetter();
@@ -220,6 +250,9 @@ namespace VhdAttachService {
         public static TinyPacket GetResponse(TinyPacket packet, Exception ex) {
             var data = new Dictionary<string, string>();
             data.Add("IsError", true.ToString(CultureInfo.InvariantCulture));
+            for (var inner = ex; inner != null; inner = inner.InnerException) {
+                if (inner is VolumeInUseException) { data.Add("ErrorCode", "InUse"); break; } //client offers retry / force
+            }
             if (ex.InnerException != null) {
                 data.Add("Message", ex.Message + "\r\n" + ex.InnerException.Message);
             } else {
@@ -230,7 +263,23 @@ namespace VhdAttachService {
 
 
 
-        private static void DetachDrive(string path) {
+        /// <summary>
+        /// Returns backing file of a virtual disk or null for physical disks.
+        /// </summary>
+        private static string GetVirtualDiskFile(int? diskNumber) {
+            if (diskNumber == null) { return null; }
+            var query = "SELECT BusType, Location FROM MSFT_Disk WHERE Number = " + diskNumber.Value.ToString(CultureInfo.InvariantCulture);
+            using (var searcher = new System.Management.ManagementObjectSearcher(@"\\.\root\Microsoft\Windows\Storage", query)) {
+                foreach (System.Management.ManagementObject disk in searcher.Get()) {
+                    using (disk) {
+                        if (Convert.ToInt32(disk["BusType"], CultureInfo.InvariantCulture) == 15) { return disk["Location"] as string; } //15 = file backed virtual
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static void DetachDrive(string path, PipeCaller caller, bool force) {
             var device = DeviceFromPath.GetDevice(path);
 
             #region VDS COM
@@ -293,9 +342,13 @@ namespace VhdAttachService {
             #endregion
 
             if (vhdFile != null) {
-                using (var disk = new Medo.IO.VirtualDisk(vhdFile.FullName)) {
-                    disk.Open(Medo.IO.VirtualDiskAccessMask.Detach);
-                    disk.Detach();
+                AuditLog.Started("Detach drive", vhdFile.FullName, path + (force ? ", force" : ""), caller.Name);
+                try {
+                    AttachHelper.Detach(vhdFile.FullName, force, caller);
+                    AuditLog.Succeeded("Detach drive", vhdFile.FullName, path, caller.Name);
+                } catch (Exception ex) {
+                    AuditLog.Failed("Detach drive", vhdFile.FullName, ex, caller.Name);
+                    throw;
                 }
             } else {
                 throw new FormatException(string.Format("Drive \"{0}\" is not a virtual hard disk.", path));

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -10,6 +10,7 @@ namespace VhdAttachService {
         public static void InitializeDisk(string path) {
             using (SafeFileHandle handle = NativeMethods.CreateFile(path, NativeMethods.GENERIC_READ | NativeMethods.GENERIC_WRITE, 0, IntPtr.Zero, NativeMethods.OPEN_EXISTING, 0, IntPtr.Zero)) {
                 if (handle.IsInvalid) { throw new Win32Exception(); }
+                EnsureBlank(handle);
 
                 var signature = new byte[4];
                 RandomNumberGenerator.Create().GetBytes(signature);
@@ -45,6 +46,26 @@ namespace VhdAttachService {
             }
         }
 
+
+
+        /// <summary>
+        /// Refuses to initialize anything but a brand-new, all-zero disk, so an existing partition table can never be overwritten.
+        /// </summary>
+        private static void EnsureBlank(SafeFileHandle handle) {
+            const int probeSize = 1024 * 1024;
+            var buffer = new byte[probeSize];
+            int total = 0;
+            using (var stream = new System.IO.FileStream(new SafeFileHandle(handle.DangerousGetHandle(), ownsHandle: false), System.IO.FileAccess.Read, 0)) {
+                int read;
+                while ((total < probeSize) && ((read = stream.Read(buffer, total, probeSize - total)) > 0)) { total += read; }
+            }
+            if (total < 1024) { throw new InvalidOperationException("Disk could not be read; it was not initialized."); }
+            var hasMbrSignature = (buffer[510] == 0x55) && (buffer[511] == 0xAA);
+            var hasGptHeader = System.Text.Encoding.ASCII.GetString(buffer, 512, 8) == "EFI PART";
+            if (hasMbrSignature || hasGptHeader || Array.Exists(buffer, b => b != 0)) {
+                throw new InvalidOperationException("Disk already contains data or a partition table; it was not initialized.");
+            }
+        }
 
 
         private static class NativeMethods {
@@ -114,7 +135,7 @@ namespace VhdAttachService {
                 public Int64 StartingOffset;
                 public Int64 PartitionLength;
                 public Int32 PartitionNumber;
-                [MarshalAsAttribute(UnmanagedType.Bool)]
+                [MarshalAsAttribute(UnmanagedType.U1)] //native BOOLEAN is one byte
                 public Boolean RewritePartition;
                 public PARTITION_INFORMATION_MBR Mbr;
             }
@@ -122,9 +143,9 @@ namespace VhdAttachService {
             [StructLayoutAttribute(LayoutKind.Sequential)]
             public struct PARTITION_INFORMATION_MBR {
                 public Byte PartitionType;
-                [MarshalAsAttribute(UnmanagedType.Bool)]
+                [MarshalAsAttribute(UnmanagedType.U1)] //native BOOLEAN is one byte; 4-byte marshalling shifted HiddenSectors
                 public Boolean BootIndicator;
-                [MarshalAsAttribute(UnmanagedType.Bool)]
+                [MarshalAsAttribute(UnmanagedType.U1)]
                 public Boolean RecognizedPartition;
                 public Int32 HiddenSectors;
                 [MarshalAs(UnmanagedType.ByValArray, SizeConst = 96)]

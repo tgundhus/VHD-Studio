@@ -85,8 +85,23 @@ namespace VhdAttach {
         }
 
 
+        private bool CreatedFile;
+
         private bool CreateVhd() {
+            this.CreatedFile = false;
+            try {
+                return this.CreateVhdCore();
+            } catch {
+                if (this.CreatedFile) { //only ever remove the partial file this method created
+                    try { File.Delete(this.FileName); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                }
+                throw;
+            }
+        }
+
+        private bool CreateVhdCore() {
             using (var stream = new FileStream(this.FileName, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.WriteThrough)) {
+                this.CreatedFile = true;
                 ReFS.RemoveIntegrityStream(stream.SafeFileHandle);
 
                 var footer = new HardDiskFooter();
@@ -124,22 +139,24 @@ namespace VhdAttach {
         }
 
         private bool CreateVhdX() {
-            using (var vhdx = new Medo.IO.VirtualDisk(this.FileName)) {
-                vhdx.CreateAsync(this.SizeInBytes, Medo.IO.VirtualDiskCreateOptions.FullPhysicalAllocation, 0, 0, Medo.IO.VirtualDiskType.Vhdx);
-                var progress = vhdx.GetCreateProgress();
-                while (progress.IsDone == false) {
-                    //bgw.ReportProgress(progress.ProgressPercentage);
-                    bgw.ReportProgress(-1);
-                    if (bgw.CancellationPending) {
-                        //TODO
-                        return false;
-                    }
-                    Thread.Sleep(500);
-                    progress = vhdx.GetCreateProgress();
+            using (var cancellation = new System.Threading.CancellationTokenSource()) {
+                var progress = new SyncProgress(p => {
+                    if (bgw.CancellationPending) { cancellation.Cancel(); }
+                    bgw.ReportProgress((p.Total > 0) ? p.Percentage : -1);
+                });
+                try {
+                    VhdAttachCommon.VirtualDiskImage.Create(this.FileName, this.SizeInBytes, true, progress, cancellation.Token);
+                } catch (System.OperationCanceledException) {
+                    return false; //partial file already removed
                 }
             }
             return true;
         }
 
+        private sealed class SyncProgress : System.IProgress<VhdAttachCommon.VirtualDiskProgress> {
+            private readonly System.Action<VhdAttachCommon.VirtualDiskProgress> Handler;
+            public SyncProgress(System.Action<VhdAttachCommon.VirtualDiskProgress> handler) { this.Handler = handler; }
+            public void Report(VhdAttachCommon.VirtualDiskProgress value) => this.Handler(value);
+        }
     }
 }

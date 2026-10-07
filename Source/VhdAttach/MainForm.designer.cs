@@ -456,12 +456,12 @@ namespace VhdAttach {
             this.Controls.Add(this.staErrorServiceMissing);
             this.Controls.Add(this.staErrorServiceNotRunning);
             this.Controls.Add(this.mnu);
-            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Icon = VhdAttach.Ui.AppIcon;
             this.KeyPreview = true;
             this.Margin = new System.Windows.Forms.Padding(3, 4, 3, 4);
             this.MinimumSize = new System.Drawing.Size(402, 236);
             this.Name = "MainForm";
-            this.Text = "VHD Attach";
+            this.Text = "VHD Studio";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Form_FormClosing);
             this.Load += new System.EventHandler(this.Form_Load);
             this.Shown += new System.EventHandler(this.Form_Shown);

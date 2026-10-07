@@ -43,6 +43,7 @@ namespace VhdAttachService {
 
         private static void Run() {
             try {
+                AuditLog.Succeeded("Service started", Environment.MachineName); //creates the protected log folder as early as possible
                 ThreadPool.QueueUserWorkItem(new WaitCallback(RunAttachAutomatics));
 
                 try {
@@ -89,18 +90,16 @@ namespace VhdAttachService {
             foreach (var fwo in todoList) {
                 try {
                     Thread.Sleep(1000); //a bit of breather
-                    var access = Medo.IO.VirtualDiskAccessMask.All;
-                    var options = Medo.IO.VirtualDiskAttachOptions.PermanentLifetime;
-                    if (fwo.ReadOnly) { options |= Medo.IO.VirtualDiskAttachOptions.ReadOnly; }
-                    if (fwo.NoDriveLetter) { options |= Medo.IO.VirtualDiskAttachOptions.NoDriveLetter; }
-                    var fileName = fwo.FileName;
-                    using (var disk = new Medo.IO.VirtualDisk(fileName)) {
-                        disk.Open(access);
-                        disk.Attach(options);
+                    using (var service = PipeCaller.ForService()) { //entries were access-checked when saved; at boot paths are re-pinned (no links, no hard links)
+                        AuditLog.Started("Auto-attach", fwo.ToString());
+                        AttachHelper.Attach(fwo, service, initializeDisk: false, strictPaths: true);
+                        AuditLog.Succeeded("Auto-attach", fwo.ToString());
                     }
+
                 } catch (Exception ex) {
                     if (failedList != null) { failedList.Add(fwo); }
                     Trace.TraceError("E: Cannot attach file \"" + fwo.FileName + "\". " + ex.Message);
+                    AuditLog.Failed("Auto-attach", fwo.ToString(), ex);
                     Medo.Diagnostics.ErrorReport.SaveToTemp(ex, fwo.FileName);
                 }
             }

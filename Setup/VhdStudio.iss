@@ -14,7 +14,7 @@
 #else
 #  define AppSetupFile   AppBase + '-' + AppVersion + '-setup'
 #endif
-#define AppUrl         "https://github.com/tgundhus/VhdAttach"
+#define AppUrl         "https://github.com/tgundhus/VHD-Studio"
 
 #define AppVersionEx   AppVersion
 #ifdef VersionHash

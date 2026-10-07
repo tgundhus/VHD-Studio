@@ -21,9 +21,9 @@ namespace VhdAttachCommon {
         public const string SettingsSubkeyPath = @"Software\xGND Software\VHD Studio"; //HKCU settings use the same path (AssemblyCompany\Product)
         public const string LegacySettingsSubkeyPath = @"Software\Josip Medved\VHD Attach";
 
-        public const string ProjectUrl = "https://github.com/tgundhus/VhdAttach";
-        public const string IssuesUrl = "https://github.com/tgundhus/VhdAttach/issues";
-        public const string ReleasesUrl = "https://github.com/tgundhus/VhdAttach/releases";
+        public const string ProjectUrl = "https://github.com/tgundhus/VHD-Studio";
+        public const string IssuesUrl = "https://github.com/tgundhus/VHD-Studio/issues";
+        public const string ReleasesUrl = "https://github.com/tgundhus/VHD-Studio/releases";
 
     }
 

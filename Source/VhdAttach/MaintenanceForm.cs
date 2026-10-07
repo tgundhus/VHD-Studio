@@ -44,7 +44,7 @@ namespace VhdAttach {
             this.TaskList = new ListBox { Dock = DockStyle.Left, Width = this.Font.Height * 11, IntegralHeight = false, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = (int)(this.Font.Height * 2.2), BorderStyle = BorderStyle.None, BackColor = Ui.AccentSoft };
             this.TaskList.Items.AddRange(TaskNames.Cast<object>().ToArray());
             this.TaskList.DrawItem += this.TaskList_DrawItem;
-            this.TaskList.SelectedIndexChanged += (s, e) => this.ShowTask(this.TaskList.SelectedItem as string);
+            this.TaskList.SelectedIndexChanged += (s, e) => { this.ReloadDetails(); this.ShowTask(this.TaskList.SelectedItem as string); };
 
             this.Page = new Panel { Dock = DockStyle.Fill, Padding = new Padding(this.Font.Height), AutoScroll = true };
 
@@ -69,6 +69,12 @@ namespace VhdAttach {
                 this.ReloadDetails();
                 var index = Array.FindIndex(TaskNames, t => string.Equals(t, initialTask, StringComparison.OrdinalIgnoreCase));
                 this.TaskList.SelectedIndex = Math.Max(0, index);
+            };
+            this.Activated += (s, e) => { //the disk may have been attached, detached or changed in another window meanwhile
+                if (this.IsBusy || (this.TaskList.SelectedItem == null)) { return; }
+                var before = this.Details;
+                this.ReloadDetails();
+                if (!SameState(before, this.Details)) { this.ShowTask(this.TaskList.SelectedItem as string); }
             };
             this.FormClosing += (s, e) => {
                 if (this.IsBusy) {
@@ -177,15 +183,33 @@ namespace VhdAttach {
             this.AddHeading(flow, "Resize");
             var isVhdx = VirtualDiskImage.IsVhdx(this.FileName) || (this.Details?.Format == "VHDX");
             this.AddParagraph(flow, isVhdx
-                ? "Grow or shrink the virtual disk. After growing, extend the partition in Disk Manager. To shrink, first shrink the partition in Disk Manager, then shrink the file to the smallest safe size."
-                : "VHD files can only grow. Convert to VHDX to be able to shrink. After growing, extend the partition in Disk Manager.");
+                ? "Grow or shrink the virtual disk. A disk and its partition are separate: growing the disk adds unused space, which the partition can then be extended into. To shrink, first shrink the partition in Disk Manager, then shrink the file to the smallest safe size."
+                : "VHD files can only grow. Convert to VHDX to be able to shrink. A disk and its partition are separate: growing the disk adds unused space, which the partition can then be extended into.");
             if (this.Details != null) {
                 this.AddParagraph(flow, string.Format(CultureInfo.CurrentCulture, "Current size: {0}. Smallest safe size: {1}.", Ui.FormatSize(this.Details.VirtualSize), Ui.FormatSize(this.Details.SmallestSafeVirtualSize)), Ui.Muted);
+            }
+            if (this.Details?.AttachedPath != null) { //attached: the partition can be extended right now, safely while in use
+                (Storage.DiskInfo Disk, Storage.PartitionInfo Partition, long Gain)? extendable = null;
+                try { extendable = Storage.PartitionExtender.FindExtendable(this.FileName); } catch (Exception ex) when (ex is System.Management.ManagementException || ex is InvalidOperationException || ex is UnauthorizedAccessException) { }
+                if (extendable != null) {
+                    var found = extendable.Value;
+                    this.AddParagraph(flow, string.Format(CultureInfo.CurrentCulture, "⚠ {0} at the end of this disk is not used by any partition. {1} is {2}.", Ui.FormatSize(found.Gain), found.Partition.DisplayName, Ui.FormatSize(found.Partition.Size)), Ui.Danger);
+                    var extendNow = this.AddButton(flow, "Extend " + found.Partition.DisplayName + " by " + Ui.FormatSize(found.Gain), Ui.Glyph.Resize);
+                    extendNow.Click += (s, e) => this.RunOperation(new Operation {
+                        Title = "Extend partition", Verb = "Extending", Cancellable = false,
+                        Summary = found.Partition.DisplayName + " will grow by " + Ui.FormatSize(found.Gain) + " into the unused space at the end of the disk. Its data stays where it is, and it can stay in use.",
+                        Action = (p, t) => extendResult = Storage.PartitionExtender.ExtendOnline(Storage.StorageManager.Revalidate(found.Disk)),
+                        OnSuccess = () => extendResult,
+                    });
+                }
             }
             var newSize = new RadioButton { Text = "New size:", AutoSize = true, Checked = true };
             var sizeBox = new TextBox { Width = this.Font.Height * 10, Text = (this.Details?.VirtualSize != null) ? Ui.FormatSize(this.Details.VirtualSize.Value * 2) : "" };
             var shrink = new RadioButton { Text = "Shrink to smallest safe size", AutoSize = true, Enabled = isVhdx };
             flow.Controls.AddRange(new Control[] { newSize, sizeBox, shrink });
+            var extend = new CheckBox { Text = "After growing, extend the last partition to use the new space (recommended)", AutoSize = true, Checked = true, Margin = new Padding(0, this.Font.Height / 2, 0, 0) };
+            flow.Controls.Add(extend);
+            shrink.CheckedChanged += (s, e) => extend.Enabled = !shrink.Checked;
             var backup = this.AddBackupOption(flow, this.FileName);
             var run = this.AddButton(flow, "Resize now", Ui.Glyph.Resize);
             run.Click += (s, e) => {
@@ -197,13 +221,33 @@ namespace VhdAttach {
                 }
                 var summary = (size == 0)
                     ? "The virtual disk will shrink to its smallest safe size (" + Ui.FormatSize(this.Details?.SmallestSafeVirtualSize) + "). Partitions are not changed; space after the last partition is removed."
-                    : "The virtual disk will change from " + Ui.FormatSize(this.Details?.VirtualSize) + " to " + Ui.FormatSize(size) + ". Partitions are not changed.";
+                    : "The virtual disk will change from " + Ui.FormatSize(this.Details?.VirtualSize) + " to " + Ui.FormatSize(size) + ".";
+                var grows = (size > 0) && ((this.Details?.VirtualSize == null) || (size > this.Details.VirtualSize));
+                var extendAfter = grows && extend.Checked && extend.Enabled;
+                if (size > 0) { summary += extendAfter ? " Afterwards the last partition is extended into the new space (the disk is attached briefly without a drive letter)." : " Partitions are not changed; extend the partition yourself to use the new space."; }
+                var result = "";
                 this.RunOperation(new Operation {
                     Title = "Resize", Verb = "Resizing", Cancellable = false, BackupOf = this.FileName, Backup = backup, Summary = summary,
-                    Action = (progress, token) => VirtualDiskImage.Resize(this.FileName, size, progress),
-                    OnSuccess = () => "Resize completed. Extend or shrink the partition in Disk Manager if needed.",
+                    Action = (progress, token) => {
+                        VirtualDiskImage.Resize(this.FileName, size, progress);
+                        if (extendAfter) {
+                            try {
+                                result = Storage.PartitionExtender.ExtendLastPartition(this.FileName);
+                            } catch (Exception ex) when (!(ex is OutOfMemoryException)) { //the resize itself succeeded; report, do not fail it
+                                result = "The partition could not be extended automatically (" + ex.Message + "). Extend it in Disk Manager.";
+                            }
+                        }
+                    },
+                    OnSuccess = () => "Disk resized to " + Ui.FormatSize(size == 0 ? this.Details?.SmallestSafeVirtualSize : size) + ". " + (extendAfter ? result : (size == 0 ? "" : "The partition was not changed; extend it to use the new space.")),
                 });
             };
+        }
+
+        private string extendResult = "";
+
+        private static bool SameState(VirtualDiskDetails a, VirtualDiskDetails b) {
+            if ((a == null) || (b == null)) { return a == b; }
+            return (a.AttachedPath == b.AttachedPath) && (a.VirtualSize == b.VirtualSize) && (a.PhysicalSize == b.PhysicalSize) && (a.NeedsLogReplay == b.NeedsLogReplay) && (a.ParentResolved == b.ParentResolved);
         }
 
         private void BuildConvert(FlowLayoutPanel flow) {
@@ -419,7 +463,8 @@ namespace VhdAttach {
                 if (p.Total <= 0) { return; }
                 this.Progress.Style = ProgressBarStyle.Continuous;
                 this.Progress.Value = p.Percentage;
-                this.ProgressText.Text = verb + " " + p.Percentage.ToString(CultureInfo.CurrentCulture) + " %";
+                var label = ((verb == "Backing up") && (p.Current > p.Total / 2)) ? "Verifying backup" : verb; //second half re-reads the copy from disk
+                this.ProgressText.Text = label + " " + p.Percentage.ToString(CultureInfo.CurrentCulture) + " %";
                 Medo.Windows.Forms.TaskbarProgress.SetPercentage(p.Percentage);
             });
             var token = this.Cancellation.Token;

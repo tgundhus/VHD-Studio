@@ -93,7 +93,7 @@ An end-to-end test suite verifies the data on real virtual disks byte for byte a
 
 ## Installation
 
-Download one of the installers from [Releases](https://github.com/tgundhus/VhdAttach/releases):
+Download one of the installers from [Releases](https://github.com/tgundhus/VHD-Studio/releases):
 
 | Installer | Size | Use it when |
 |---|---|---|
@@ -145,7 +145,7 @@ See [BUILD.md](BUILD.md). In short: `dotnet test Source\VhdStudio.sln`, then `Se
 ## Roadmap
 
 The market analysis and the prioritized feature proposal are in [docs/PROPOSAL.md](docs/PROPOSAL.md).
-Bug reports and ideas are welcome in [Issues](https://github.com/tgundhus/VhdAttach/issues).
+Bug reports and ideas are welcome in [Issues](https://github.com/tgundhus/VHD-Studio/issues).
 
 
 ## License

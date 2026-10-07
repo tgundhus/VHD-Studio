@@ -17,7 +17,7 @@ namespace VhdAttach {
     /// </summary>
     internal static class Feedback {
 
-        private const string LatestReleaseApi = "https://api.github.com/repos/tgundhus/VhdAttach/releases/latest";
+        private const string LatestReleaseApi = "https://api.github.com/repos/tgundhus/VHD-Studio/releases/latest";
 
         public static Version CurrentVersion => Assembly.GetExecutingAssembly().GetName().Version;
 

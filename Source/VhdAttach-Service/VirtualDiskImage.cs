@@ -623,8 +623,14 @@ namespace VhdAttachCommon {
             var size = 1024;
             var path = new StringBuilder(size / 2);
             var res = NativeMethods.GetVirtualDiskPhysicalPath(handle, ref size, path);
+            LastPhysicalPathError = res;
             return (res == NativeMethods.ERROR_SUCCESS) ? path.ToString() : null;
         }
+
+        /// <summary>
+        /// Win32 result of the last GetVirtualDiskPhysicalPath call (diagnostics).
+        /// </summary>
+        internal static int LastPhysicalPathError;
 
         private static Guid ReadGuid(byte[] buffer, int offset) {
             var bytes = new byte[16];

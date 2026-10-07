@@ -46,6 +46,23 @@ namespace VhdAttachCommon {
 
 
         /// <summary>
+        /// Boot time (UTC) of the last auto-attach run, so a service restart within the same boot does not repeat it.
+        /// </summary>
+        public static DateTime? LastAutoAttachBoot {
+            get {
+                using (var rk = Registry.LocalMachine.OpenSubKey(RootSubkeyPath, false)) {
+                    if ((rk?.GetValue("LastAutoAttachBoot", null) is long ticks) && (ticks > 0)) { return new DateTime(ticks, DateTimeKind.Utc); }
+                    return null;
+                }
+            }
+            set {
+                using (var rk = RootRegistryKey.CreateSubKey(RootSubkeyPath, RegistryKeyPermissionCheck.ReadWriteSubTree)) {
+                    rk?.SetValue("LastAutoAttachBoot", value?.Ticks ?? 0L, RegistryValueKind.QWord);
+                }
+            }
+        }
+
+        /// <summary>
         /// Returns true if VHD Studio is handling extension.
         /// </summary>
         public static bool ContextMenuVhd {

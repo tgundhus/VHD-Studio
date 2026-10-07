@@ -73,6 +73,47 @@ namespace VhdAttachTest {
         }
 
         [TestMethod()]
+        public void Resize_GrowAndExtendPartition_KeepsAllData() {
+            using (var disk = ScratchDisk.Create()) {
+                disk.Attach(false);
+                var data = disk.WriteFiles(4, 4 * MB);
+                var before = disk.DataPartition().Size;
+                disk.Detach();
+
+                VirtualDiskImage.Resize(disk.FileName, 2L << 30, null);
+                var message = PartitionExtender.ExtendLastPartition(disk.FileName);
+                StringAssert.Contains(message, "extended");
+                Assert.IsFalse(VirtualDiskImage.IsAttached(disk.FileName), "Extender must detach the disk again.");
+
+                disk.Attach(false);
+                var after = disk.DataPartition().Size;
+                disk.Detach();
+                Assert.IsTrue(after > before + (900L * MB), string.Format("Partition should use the new space ({0} -> {1}).", before, after));
+                disk.Verify(data);
+            }
+        }
+
+        [TestMethod()]
+        public void ExtendOnline_AttachedDiskWithUnusedSpace_KeepsAllData() {
+            using (var disk = ScratchDisk.Create()) {
+                disk.Attach(false);
+                var data = disk.WriteFiles(4, 4 * MB);
+                disk.Detach();
+                VirtualDiskImage.Resize(disk.FileName, 2L << 30, null); //grown, partition not extended (the reported situation)
+
+                disk.Attach(false);
+                var found = PartitionExtender.FindExtendable(disk.FileName);
+                Assert.IsNotNull(found, "Unused space at the end must be detected.");
+                Assert.IsTrue(found.Value.Gain > 900L * MB);
+                using (new FileStream(Path.Combine(disk.WaitForVolume(), "open-while-extending.txt"), FileMode.Create, FileAccess.Write, FileShare.None)) {
+                    StringAssert.Contains(PartitionExtender.ExtendOnline(StorageManager.Revalidate(found.Value.Disk)), "extended"); //safe while in use
+                }
+                Assert.IsNull(PartitionExtender.FindExtendable(disk.FileName), "Nothing left to extend.");
+                disk.Detach();
+                disk.Verify(data);
+            }
+        }
+        [TestMethod()]
         public void Resize_ShrinkToSmallestSafe_KeepsAllData() {
             using (var disk = ScratchDisk.Create(2L << 30)) {
                 disk.Attach(false);

@@ -24,10 +24,20 @@ namespace VhdAttachService {
             Pipe.CreateSecure(PipeSecurity); //remote clients rejected; first instance only (no squatting)
         }
 
-        public static TinyPacket Receive() {
+        /// <summary>
+        /// Waits for one request. Returns null (and disconnects) if the client sends nothing within a few seconds
+        /// or the service is stopping, so a silent or vanished client can never hang the service.
+        /// </summary>
+        public static TinyPacket Receive(WaitHandle cancel) {
             Pipe.Connect();
 
-            while (Pipe.HasBytesToRead == false) { Thread.Sleep(100); }
+            var waited = Stopwatch.StartNew();
+            while (Pipe.HasBytesToRead == false) {
+                if (cancel.WaitOne(100) || (waited.ElapsedMilliseconds > 10000)) {
+                    try { Pipe.Disconnect(); } catch (IOException) { } catch (InvalidOperationException) { }
+                    return null;
+                }
+            }
             var buffer = Pipe.ReadAvailable();
 
             var packet = TinyPacket.Parse(buffer);

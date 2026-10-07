@@ -1,4 +1,4 @@
-﻿//Copyright (c) 2008 Josip Medved <jmedved@jmedved.com>
+//Copyright (c) 2008 Josip Medved <jmedved@jmedved.com>
 
 //2008-01-02: New version.
 //2008-01-05: Top line now contains product name.
@@ -83,7 +83,7 @@ namespace Medo.Windows.Forms {
                 versionText += " DEBUG";
 #endif
                 string copyrightText = GetAppCopyright(assembly);
-                string applicationPath = Assembly.GetEntryAssembly().Location;
+                string applicationPath = Environment.ProcessPath; //the entry assembly is a .dll on .NET
 
                 ShowForm(owner, webpage, productText, versionText, copyrightText, applicationPath);
 
@@ -304,14 +304,14 @@ namespace Medo.Windows.Forms {
         static void buttonWebPage_Click(object sender, System.EventArgs e) {
             try {
                 string url = (string)((Control)sender).Tag;
-                System.Diagnostics.Process.Start(url);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
             } catch (System.ComponentModel.Win32Exception) { }
         }
 
         static void buttonReadme_Click(object sender, System.EventArgs e) {
             try {
                 string path = (string)((Control)sender).Tag;
-                System.Diagnostics.Process.Start(path);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
             } catch (System.ComponentModel.Win32Exception) { }
         }
 

@@ -167,6 +167,7 @@ Filename: "{app}\{#AppExe}";                                Flags: postinstall n
 
 [UninstallRun]
 Filename: "{app}\{#ServiceExe}";  Parameters: "/Uninstall";  Flags: runascurrentuser waituntilterminated runhidden;  RunOnceId: "UninstallService"
+Filename: "{sys}\taskkill.exe";   Parameters: "/F /IM {#ServiceExe}";  Flags: runhidden waituntilterminated;  RunOnceId: "EndServiceProcess"
 
 
 [Code]
@@ -233,6 +234,21 @@ begin
   end;
 end;
 
+{ VHD Studio 5.0.0's service process could stay alive after "stop" and lock its files.
+  Make sure it is gone before files are replaced: stop, give it time, then end the process as a last resort. }
+procedure StopServiceProcess;
+var
+  ResultCode, I: Integer;
+begin
+  Exec(ExpandConstant('{sys}\sc.exe'), 'stop VhdStudio', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  for I := 1 to 10 do begin
+    if not Exec(ExpandConstant('{sys}\cmd.exe'), '/c tasklist /FI "IMAGENAME eq {#ServiceExe}" | find /I "{#ServiceExe}" >nul', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then Exit;
+    Sleep(500);
+  end;
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#ServiceExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(1000);
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
@@ -241,6 +257,7 @@ var
 begin
   { Stop and remove the service of a previous VHD Studio version. }
   Exec(ExpandConstant('{app}\{#ServiceExe}'), '/Uninstall', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  StopServiceProcess;
 
   { Carry over the VHD Attach 4.x auto-mount list; its uninstaller deletes the old key. }
   if not RegValueExists(HKLM64, 'Software\xGND Software\VHD Studio', 'AutoAttachVhdList') then begin

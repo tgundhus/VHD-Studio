@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
 using VhdAttachCommon;
@@ -82,16 +83,30 @@ namespace VhdAttachService {
             }
         }
 
+        /// <summary>
+        /// Stops the service and waits until its process has really exited (a "stopped" service can still hold its files).
+        /// </summary>
         private static void StopIfRunning(string serviceName) {
             try {
                 using (var sc = new ServiceController(serviceName)) {
                     if (sc.Status != ServiceControllerStatus.Stopped) {
                         sc.Stop();
-                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(10));
+                        sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20));
                     }
                 }
             } catch (InvalidOperationException) {
             } catch (System.ServiceProcess.TimeoutException) { }
+
+            var self = Environment.ProcessId;
+            foreach (var process in System.Diagnostics.Process.GetProcessesByName(Path.GetFileNameWithoutExtension(Branding.ServiceExe))) {
+                using (process) {
+                    if (process.Id == self) { continue; }
+                    try {
+                        if (!process.WaitForExit(15000)) { process.Kill(); process.WaitForExit(5000); } //last resort; the service is already stopped
+                    } catch (InvalidOperationException) {
+                    } catch (System.ComponentModel.Win32Exception) { }
+                }
+            }
         }
 
 

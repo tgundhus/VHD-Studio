@@ -20,6 +20,7 @@
     <Compile Include="..\VhdAttach-Service\VirtualDiskImage.cs" Link="Shared\VirtualDiskImage.cs" />
     <Compile Include="..\VhdAttach-Service\VhdxHeader.cs" Link="Shared\VhdxHeader.cs" />
     <Compile Include="..\VhdAttach-Service\VolumeLock.cs" Link="Shared\VolumeLock.cs" />
+    <Compile Include="..\VhdAttach-Service\PathGuard.cs" Link="Shared\PathGuard.cs" />
     <Compile Include="..\VhdAttach-Service\AuditLog.cs" Link="Shared\AuditLog.cs" />
     <Compile Include="..\VhdAttach-Service\VirtualDiskBackup.cs" Link="Shared\VirtualDiskBackup.cs" />
     <Compile Include="..\VhdAttach-Service\(Medo)\VirtualDisk [010].cs" Link="(Medo)\VirtualDisk [010].cs" />
@@ -28,6 +29,7 @@
 
   <ItemGroup>
     <PackageReference Include="System.Management" Version="10.0.0" />
+    <PackageReference Include="System.IO.Hashing" Version="10.0.0" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
   </ItemGroup>
 

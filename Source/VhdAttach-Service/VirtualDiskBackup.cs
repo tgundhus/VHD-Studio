@@ -55,10 +55,12 @@ namespace VhdAttachCommon {
                 using (var source = OpenForSequentialRead(fileName, FileShare.Read)) { //FileShare.Read: no writer may change the source mid-copy
                     length = RandomAccess.GetLength(source);
                     var total = length * 2; //copy + verification pass
+                    using (File.OpenHandle(backupPath, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { }
+                    created = true; //from here on the file is ours
+                    PlainFile.MakePlain(backupPath); //folders can force compression or encryption, which Windows refuses for virtual disks
                     using (var target = OpenForSequentialWrite(backupPath, length, out var unbuffered))
                     {
                         var hash = new System.IO.Hashing.XxHash128();
-                        created = true;
                         long readOffset = 0, writeOffset = 0;
                         Pipeline(
                             block => { //reader thread: read and hash
@@ -113,6 +115,7 @@ namespace VhdAttachCommon {
                 if (!CryptographicOperations.FixedTimeEquals(sourceHash, backupHash)) {
                     throw new IOException("Backup verification failed: the copy does not match the original.");
                 }
+                EnsureUsableAsVirtualDisk(fileName, backupPath);
             } catch {
                 if (created) {
                     try { File.Delete(backupPath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
@@ -144,16 +147,35 @@ namespace VhdAttachCommon {
         }
 
         /// <summary>
-        /// Creates the backup file for unbuffered writing (straight to the device, like Explorer does for large files,
-        /// so a multi-gigabyte copy does not flush everything else out of memory); falls back to buffered writes.
+        /// Opens the (just created, plain, empty) backup file for unbuffered writing, straight to the device like Explorer
+        /// does for large files, so a multi-gigabyte copy does not flush everything else out of memory; falls back to
+        /// buffered writes. The full length is reserved up front to keep the file contiguous.
         /// </summary>
         private static Microsoft.Win32.SafeHandles.SafeFileHandle OpenForSequentialWrite(string fileName, long length, out bool unbuffered) {
+            Microsoft.Win32.SafeHandles.SafeFileHandle handle;
             try {
                 unbuffered = true;
-                return File.OpenHandle(fileName, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, NoBuffering, preallocationSize: length);
+                handle = File.OpenHandle(fileName, FileMode.Open, FileAccess.ReadWrite, FileShare.None, NoBuffering);
             } catch (IOException ex) when (ex.HResult == unchecked((int)0x80070057)) { //ERROR_INVALID_PARAMETER: no unbuffered support
-                unbuffered = false; //CreateNew below refuses an existing file; nothing here ever deletes one
-                return File.OpenHandle(fileName, FileMode.CreateNew, FileAccess.Write, FileShare.None, FileOptions.None, preallocationSize: length);
+                unbuffered = false;
+                handle = File.OpenHandle(fileName, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            }
+            RandomAccess.SetLength(handle, length);
+            return handle;
+        }
+
+        /// <summary>
+        /// A backup of a virtual disk is only useful if Windows can open it as one. Checked after the checksum matched.
+        /// </summary>
+        private static void EnsureUsableAsVirtualDisk(string sourceFileName, string backupPath) {
+            var extension = Path.GetExtension(sourceFileName).ToLowerInvariant();
+            if ((extension != ".vhd") && (extension != ".vhdx") && (extension != ".avhd") && (extension != ".avhdx")) { return; }
+            var problem = PlainFile.GetProblem(backupPath);
+            if (problem != null) { throw new IOException("The backup was copied correctly, but Windows cannot use it as a virtual disk because " + problem + "."); }
+            try {
+                VirtualDiskImage.GetDetails(backupPath);
+            } catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is InvalidOperationException || ex is NotSupportedException || ex is System.ComponentModel.Win32Exception) {
+                throw new IOException("The backup was copied correctly, but Windows cannot open it as a virtual disk: " + ex.Message, ex);
             }
         }
 

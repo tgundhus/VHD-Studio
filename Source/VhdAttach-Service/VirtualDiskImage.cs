@@ -664,6 +664,9 @@ namespace VhdAttachCommon {
                         throw new UnauthorizedAccessException(string.Format("\"{0}\" was not closed cleanly and its log has to be replayed before it can be used. Use Repair → Replay log (requires write access to the file).", name));
                     }
                     throw new UnauthorizedAccessException(string.Format("Access to \"{0}\" was denied. The file may be in use, read-only, or the operation requires administrator rights.", name));
+                case NativeMethods.ERROR_FILE_SYSTEM_LIMITATION:
+                case NativeMethods.ERROR_VHD_INVALID_FILE_ATTRIBUTES:
+                    throw new IOException(string.Format("Windows cannot use \"{0}\" as a virtual disk: virtual disk files must not be compressed, encrypted or sparse. This usually comes from a compressed or encrypted folder. Use Maintenance → Repair → Make usable, or choose another folder.", name));
                 case NativeMethods.ERROR_SHARING_VIOLATION:
                     throw new IOException(string.Format("\"{0}\" is in use by another process (for example a running VM, WSL or Docker).", name));
                 case NativeMethods.ERROR_FILE_EXISTS:
@@ -693,6 +696,8 @@ namespace VhdAttachCommon {
             public const int ERROR_PATH_NOT_FOUND = 3;
             public const int ERROR_ACCESS_DENIED = 5;
             public const int ERROR_SHARING_VIOLATION = 32;
+            public const int ERROR_FILE_SYSTEM_LIMITATION = 665;
+            public const int ERROR_VHD_INVALID_FILE_ATTRIBUTES = unchecked((int)0xC03A001A); //compressed, encrypted or sparse
             public const int ERROR_NOT_SUPPORTED = 50;
             public const int ERROR_FILE_EXISTS = 80;
             public const int ERROR_INVALID_PARAMETER = 87;

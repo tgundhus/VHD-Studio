@@ -59,7 +59,7 @@ VHD Studio is developed by **Tobias Gundhus ([xGND Software](https://github.com/
 | **Details** | Type, virtual / on-disk size, fragmentation, sector sizes, smallest safe size, parent chain. |
 
 Every operation that changes an existing file first shows exactly what will change and makes a
-**SHA-256-verified backup** (enabled by default when there is room). It refuses disks that are attached
+**verified backup** (checksum re-read from disk) (enabled by default when there is room). It refuses disks that are attached
 or in use, and checks the result afterwards. Long operations show progress, and those that are
 safe to interrupt can be cancelled.
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## 5.0.1
+
+### Fixed
+- Installing over, or uninstalling, 5.0.0 could fail with "DeleteFile failed; code 5. Access is denied"
+  (for example on `clrjit.dll`). The 5.0.0 service process did not exit after being stopped, because its
+  request loop could wait forever and .NET 10 no longer supports the old `Thread.Abort` fallback.
+  The loop now ends on stop or after 10 seconds without data (which also stops a silent client from
+  hanging the service). The service thread no longer keeps the process alive, and setup and uninstall
+  make sure the service process has exited before files are replaced.
+- Restarting the service (for example during an upgrade) re-ran auto-mount. That re-attached disks
+  you had detached on purpose and logged false failures for disks still attached. Auto-mount now runs
+  once per boot and skips disks that are already attached. Attached disks are never touched by
+  install, upgrade or uninstall.
+- Maintenance and Disk Manager could hide in the toolbar's overflow menu at the default window width.
+  The window is now always wide enough for every toolbar button.
+
+### Improved
+- Backups are about 3.4× faster (3 GB: 7.2 s → 2.1 s on NVMe). Reading, checksumming and writing are
+  pipelined, large files are written unbuffered like Explorer does (so a big backup no longer flushes
+  everything else out of memory), and data is flushed to disk once.
+- Backup verification now re-reads the copy from disk, bypassing the cache, so it checks what was
+  really written. It uses a 128-bit XXH128 checksum instead of SHA-256, which was the bottleneck at
+  about 2 GB/s.
+
 ## 5.0.0: VHD Studio
 
 First release under the VHD Studio name, by Tobias Gundhus (xGND Software). It continues
@@ -40,7 +64,7 @@ VHD Attach 1.0–4.22, created and maintained 2009–2020 by Josip Medved
 - Removed a code path that started a `VhdAttachExecutor.exe` that no longer exists.
 
 ### Data safety
-- Verified (SHA-256) backups before every in-place change, enabled by default.
+- Verified backups (128-bit checksum, re-read from disk) before every in-place change, enabled by default.
 - Operations refuse attached or in-use disks, disks changed since selection, and protected disks
   (system, boot, cluster, page file, partitions holding attached images). Format never forces a dismount.
 - Resize and merge cannot be interrupted midway. A cancelled or failed convert removes only the file

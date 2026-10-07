@@ -13,7 +13,7 @@ and change-approval boards.
 2. **Never write when asked to read.** A read-only attach never modifies the image, not even to
    replay a pending VHDX log.
 3. **Back up before changing in place.** Every Maintenance operation that modifies an existing file
-   offers a SHA-256-verified backup. It is enabled by default whenever there is enough free space.
+   offers a verified backup (XXH128 checksum of the source compared with the copy re-read from disk, bypassing the cache). It is enabled by default whenever there is enough free space.
 4. **Refuse rather than guess.** Operations stop when a disk is attached, in use, changed since it
    was selected, protected, or short of space. In every one of these cases nothing is changed.
 5. **Only interrupt what is safe to interrupt.** Compact, convert and backup can be cancelled.

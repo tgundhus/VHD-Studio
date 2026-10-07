@@ -12,9 +12,11 @@ and change-approval boards.
    file it created itself.
 2. **Never write when asked to read.** A read-only attach never modifies the image, not even to
    replay a pending VHDX log.
-3. **Back up before changing in place.** Every Maintenance operation that modifies an existing file
-   offers a verified backup (XXH128 checksum of the source compared with the copy re-read from disk, bypassing the cache). It is enabled by default whenever there is enough free space.
-4. **Refuse rather than guess.** Operations stop when a disk is attached, in use, changed since it
+3. **Back up before changing in place, and make sure the backup is usable.** Every Maintenance
+   operation that modifies an existing file offers a backup, enabled by default whenever there is
+   enough free space. The backup is stored plainly (never compressed, encrypted or sparse, whatever the
+   folder settings). Its XXH128 checksum must match the source when re-read from disk, bypassing the
+   cache. Windows must also be able to open it as a virtual disk.4. **Refuse rather than guess.** Operations stop when a disk is attached, in use, changed since it
    was selected, protected, or short of space. In every one of these cases nothing is changed.
 5. **Only interrupt what is safe to interrupt.** Compact, convert and backup can be cancelled.
    Resize, merge and metadata changes cannot be cancelled once started.

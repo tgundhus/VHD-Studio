@@ -94,6 +94,24 @@ namespace VhdAttach {
             if (this.Right > Screen.FromControl(this).WorkingArea.Right) { this.Left = Math.Max(Screen.FromControl(this).WorkingArea.Left, Screen.FromControl(this).WorkingArea.Right - this.Width); }
         }
 
+        /// <summary>
+        /// Windows refuses virtual disk files that are compressed, encrypted or sparse (often inherited from the folder).
+        /// Offers to fix the file in place; the content does not change. Returns true if the file was fixed.
+        /// </summary>
+        private bool OfferMakePlain(FileInfo file) {
+            string problem;
+            try { problem = file.Exists ? PlainFile.GetProblem(file.FullName) : null; } catch (IOException) { return false; } catch (UnauthorizedAccessException) { return false; }
+            if (problem == null) { return false; }
+            var question = string.Format("Windows cannot use \"{0}\" as a virtual disk because {1}.\n\nThis usually comes from a compressed or encrypted folder. VHD Studio can store the file normally (like 'compact /u'); its content does not change. Large files take a while.\n\nMake it usable now?", file.Name, problem);
+            if (Medo.MessageBox.ShowQuestion(this, question, MessageBoxButtons.YesNo) != DialogResult.Yes) { return false; }
+            using (var wait = new ServiceWaitForm("Making " + file.Name + " usable", () => PlainFile.MakePlain(file.FullName), "The file could not be made usable. It was not changed in a harmful way; its content is intact.")) {
+                wait.StartPosition = FormStartPosition.CenterParent;
+                if (wait.ShowDialog(this) != DialogResult.OK) { return false; }
+            }
+            AuditLog.Succeeded("Make usable as virtual disk", file.FullName, problem);
+            return true;
+        }
+
         private void OpenMaintenance(string task) {
             if (this.VhdFileName == null) { return; }
             using (var form = new MaintenanceForm(this.VhdFileName, task)) {
@@ -576,6 +594,7 @@ namespace VhdAttach {
                 UpdateData(newDocument.FileName);
                 this.VhdFileName = newDocument.FileName;
             } catch (Exception ex) {
+                if (this.OfferMakePlain(file)) { this.OpenFile(fileName, removeRecent); return; }
                 if (removeRecent) {
                     if (Medo.MessageBox.ShowError(this, string.Format("Cannot open \"{0}\".\n\n{1}\n\nDo you wish to remove it from list?", file.Name, ex.Message), MessageBoxButtons.YesNo) == DialogResult.Yes) {
                         Recent.Remove(fileName);

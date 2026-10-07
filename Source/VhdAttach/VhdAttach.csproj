@@ -21,6 +21,7 @@
     <Compile Include="..\VhdAttach-Service\VhdxHeader.cs" Link="Shared\VhdxHeader.cs" />
     <Compile Include="..\VhdAttach-Service\VolumeLock.cs" Link="Shared\VolumeLock.cs" />
     <Compile Include="..\VhdAttach-Service\PathGuard.cs" Link="Shared\PathGuard.cs" />
+    <Compile Include="..\VhdAttach-Service\PlainFile.cs" Link="Shared\PlainFile.cs" />
     <Compile Include="..\VhdAttach-Service\AuditLog.cs" Link="Shared\AuditLog.cs" />
     <Compile Include="..\VhdAttach-Service\VirtualDiskBackup.cs" Link="Shared\VirtualDiskBackup.cs" />
     <Compile Include="..\VhdAttach-Service\(Medo)\VirtualDisk [010].cs" Link="(Medo)\VirtualDisk [010].cs" />

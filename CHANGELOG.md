@@ -1,5 +1,17 @@
 # Changelog
 
+## 5.0.2
+
+### Fixed
+- A backup made in a compressed or encrypted folder inherited that setting, and Windows refuses such
+  files as virtual disks ("must be uncompressed and unencrypted and must not be sparse"). Backups are
+  now always stored plainly. After the checksum matches, Windows must also open the backup as a virtual
+  disk, or the backup counts as failed and the original is not changed.
+- Files that Windows refuses for this reason (for example earlier backups) can be fixed with
+  **Repair → Make usable as a virtual disk**. When opening such a file fails, the main window offers
+  the same fix. It works like `compact /u`; the content does not change.
+- The error message now explains the cause and the fix instead of showing the raw Windows text.
+
 ## 5.0.1
 
 ### Fixed

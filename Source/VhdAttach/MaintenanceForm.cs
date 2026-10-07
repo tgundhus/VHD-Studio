@@ -353,6 +353,20 @@ namespace VhdAttach {
         private void BuildRepair(FlowLayoutPanel flow) {
             this.AddHeading(flow, "Repair");
 
+            string plainProblem = null;
+            try { plainProblem = PlainFile.GetProblem(this.FileName); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            if (plainProblem != null) {
+                this.AddSubheading(flow, "Make usable as a virtual disk");
+                this.AddParagraph(flow, "Windows cannot use this file as a virtual disk because " + plainProblem + " (usually inherited from a compressed or encrypted folder). This stores the file normally again, like 'compact /u'. The content does not change; large files take a while.", Ui.Danger);
+                var makePlain = this.AddButton(flow, "Make usable", Ui.Glyph.Repair);
+                makePlain.Click += (s, e) => this.RunOperation(new Operation {
+                    Title = "Make usable as a virtual disk", Verb = "Converting storage",
+                    Summary = "The file will be stored uncompressed, unencrypted and not sparse. Its content stays exactly the same.",
+                    Action = (p, t) => PlainFile.MakePlain(this.FileName),
+                    OnSuccess = () => "The file can now be used as a virtual disk.",
+                });
+            }
+
             this.AddSubheading(flow, "Replay log");
             this.AddParagraph(flow, "A VHDX that was not closed cleanly (crash, power loss) keeps a log that must be replayed before Windows will open it, often reported as \"Access denied\". Replaying opens the file read/write once.");
             if (this.Details != null) { this.AddParagraph(flow, this.Details.NeedsLogReplay ? "Status: log replay is required." : "Status: no pending log.", this.Details.NeedsLogReplay ? Ui.Danger : Ui.Teal); }

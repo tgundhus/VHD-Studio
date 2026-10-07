@@ -75,6 +75,25 @@ namespace VhdAttach {
             mnu.Items.Insert(index + 2, this.mnuDiskManager);
         }
 
+        /// <summary>
+        /// Keeps every toolbar button visible: the window can never be narrower than the toolbar needs,
+        /// so features do not silently disappear into the overflow chevron.
+        /// </summary>
+        private void EnsureToolbarFits() {
+            var needed = mnu.Padding.Horizontal + this.Font.Height * 3; //slack for changing texts (drive letter, auto-mount state)
+            foreach (ToolStripItem item in mnu.Items) {
+                if (!item.Available) { continue; }
+                needed += item.GetPreferredSize(Size.Empty).Width + item.Margin.Horizontal;
+            }
+            var frame = this.Width - this.ClientSize.Width;
+            var minimumWidth = needed + frame;
+            var screen = Screen.FromControl(this).WorkingArea.Width;
+            minimumWidth = Math.Min(minimumWidth, screen); //tiny screens: overflow remains as a last resort
+            this.MinimumSize = new Size(minimumWidth, this.MinimumSize.Height);
+            if (this.Width < minimumWidth) { this.Width = minimumWidth; }
+            if (this.Right > Screen.FromControl(this).WorkingArea.Right) { this.Left = Math.Max(Screen.FromControl(this).WorkingArea.Left, Screen.FromControl(this).WorkingArea.Right - this.Width); }
+        }
+
         private void OpenMaintenance(string task) {
             if (this.VhdFileName == null) { return; }
             using (var form = new MaintenanceForm(this.VhdFileName, task)) {
@@ -202,6 +221,7 @@ namespace VhdAttach {
 
         private void Form_Load(object sender, EventArgs e) {
             Medo.Windows.Forms.State.Load(this, list);
+            this.EnsureToolbarFits(); //after restoring the saved size, which may predate the newer toolbar buttons
             OpenFromCommandLineArgs();
             UpdateRecent();
 
@@ -766,7 +786,7 @@ namespace VhdAttach {
             if (volume != null) {
                 var drive = new DriveInfo(volume.DriveLetter3);
                 if (drive.IsReady) {
-                    Process.Start(volume.DriveLetter3);
+                    Process.Start(new ProcessStartInfo(volume.DriveLetter3) { UseShellExecute = true }); //.NET does not shell-execute by default
                 } else {
                     Process.Start("explorer.exe", "/select," + volume.DriveLetter3);
                 }
@@ -876,7 +896,7 @@ namespace VhdAttach {
                     //send all other files to second instances
                     for (int j = i + 1; j < filesToOpen.Length; ++j) {
                         var jFile = new FileInfo(filesToOpen[j]);
-                        Process.Start(Utility.GetProcessStartInfo(Assembly.GetExecutingAssembly().Location, @"/ OpenOrExit """ + jFile.FullName + @""""));
+                        Process.Start(Utility.GetProcessStartInfo(Environment.ProcessPath, @"/OpenOrExit """ + jFile.FullName + @""""));
                         Thread.Sleep(100 / Environment.ProcessorCount);
                     }
                     break; //i

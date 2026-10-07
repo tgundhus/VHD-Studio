@@ -394,7 +394,7 @@ namespace Medo.Services
                             {
                                 var fileName = Path.Combine(Path.GetTempPath(), UpgradeFile.FileName);
                                 File.WriteAllBytes(fileName, bytes);
-                                Process.Start(fileName);
+                                Process.Start(new ProcessStartInfo(fileName) { UseShellExecute = true });
                                 System.Windows.Forms.Application.Exit();
                                 DialogResult = DialogResult.OK;
                             }

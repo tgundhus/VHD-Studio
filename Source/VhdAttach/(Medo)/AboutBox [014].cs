@@ -88,7 +88,7 @@ namespace Medo.Windows.Forms {
                 versionText += " DEBUG";
 #endif
                 var copyrightText = GetAppCopyright(assembly);
-                var applicationPath = Assembly.GetEntryAssembly().Location;
+                var applicationPath = Environment.ProcessPath; //the entry assembly is a .dll on .NET
 
                 ShowForm(owner, webpage, productText, versionText, copyrightText, applicationPath);
 
@@ -317,7 +317,7 @@ namespace Medo.Windows.Forms {
         static void buttonWebPage_Click(object sender, EventArgs e) {
             try {
                 var url = (string)((Control)sender).Tag;
-                Process.Start(url);
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
             } catch (Win32Exception) { }
         }
 
@@ -329,10 +329,10 @@ namespace Medo.Windows.Forms {
                     if (exe != null) {
                         Process.Start(exe, path);
                     } else {
-                        Process.Start(path);
+                        Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
                     }
                 } else {
-                    Process.Start(path);
+                    Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
                 }
             } catch (Win32Exception) { }
         }

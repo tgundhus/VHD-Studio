@@ -20,7 +20,6 @@ namespace VhdAttachTest {
         public static readonly string Root = Path.Combine(Path.GetTempPath(), "VhdStudioSafetyTests");
 
         public string FileName { get; }
-        private Medo.IO.VirtualDisk Attached;
 
         private ScratchDisk(string fileName) {
             this.FileName = fileName;
@@ -63,24 +62,37 @@ namespace VhdAttachTest {
 
         #region Attach
 
+        /// <summary>
+        /// Attaches exactly like the product: permanent lifetime, handle closed right away, so detach opens it afresh.
+        /// </summary>
         public void Attach(bool readOnly) {
-            if (this.Attached != null) { throw new InvalidOperationException("Already attached."); }
-            var vd = new Medo.IO.VirtualDisk(this.FileName);
-            vd.Open(readOnly ? (Medo.IO.VirtualDiskAccessMask.AttachReadOnly | Medo.IO.VirtualDiskAccessMask.GetInfo | Medo.IO.VirtualDiskAccessMask.Detach) : Medo.IO.VirtualDiskAccessMask.All);
-            vd.Attach(Medo.IO.VirtualDiskAttachOptions.NoDriveLetter | (readOnly ? Medo.IO.VirtualDiskAttachOptions.ReadOnly : Medo.IO.VirtualDiskAttachOptions.None));
-            this.Attached = vd;
+            if (this.IsAttached) { throw new InvalidOperationException("Already attached."); }
+            using (var vd = new Medo.IO.VirtualDisk(this.FileName)) {
+                vd.Open(readOnly ? (Medo.IO.VirtualDiskAccessMask.AttachReadOnly | Medo.IO.VirtualDiskAccessMask.GetInfo | Medo.IO.VirtualDiskAccessMask.Detach) : Medo.IO.VirtualDiskAccessMask.All);
+                vd.Attach(Medo.IO.VirtualDiskAttachOptions.PermanentLifetime | Medo.IO.VirtualDiskAttachOptions.NoDriveLetter | (readOnly ? Medo.IO.VirtualDiskAttachOptions.ReadOnly : Medo.IO.VirtualDiskAttachOptions.None));
+            }
+            this.IsAttached = true;
             var disk = this.StorageDisk();
             if (disk.IsOffline) { StorageManager.SetDiskOnline(disk, true); }
         }
 
         public void Detach() {
-            if (this.Attached == null) { return; }
+            if (!this.IsAttached) { return; }
             VhdAttachService.AttachHelper.Detach(this.FileName, false, VhdAttachService.PipeCaller.ForService());
-            this.Attached.Dispose();
-            this.Attached = null;
+            this.IsAttached = false;
         }
 
-        public string PhysicalPath => this.Attached?.GetAttachedPath();
+        private bool IsAttached;
+
+        public string PhysicalPath {
+            get {
+                if (!this.IsAttached) { return null; }
+                using (var vd = new Medo.IO.VirtualDisk(this.FileName)) {
+                    vd.Open(Medo.IO.VirtualDiskAccessMask.GetInfo | Medo.IO.VirtualDiskAccessMask.Detach);
+                    return vd.GetAttachedPath();
+                }
+            }
+        }
 
         /// <summary>
         /// The storage view of this disk, verified to be virtual and backed by our file.
@@ -163,7 +175,10 @@ namespace VhdAttachTest {
 
 
         public void Dispose() {
-            try { this.Detach(); } catch (Exception) { try { this.Attached?.Detach(); } catch (Exception) { } this.Attached?.Dispose(); this.Attached = null; }
+            try { this.Detach(); } catch (Exception) { //test failed mid-way: make sure the scratch disk never stays attached
+                try { VhdAttachService.AttachHelper.Detach(this.FileName, true, VhdAttachService.PipeCaller.ForService()); } catch (Exception) { }
+                this.IsAttached = false;
+            }
             try {
                 if (File.Exists(this.FileName)) {
                     File.SetAttributes(this.FileName, FileAttributes.Normal);

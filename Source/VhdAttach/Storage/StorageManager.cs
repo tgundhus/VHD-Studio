@@ -6,7 +6,10 @@ using System.Management;
 
 namespace VhdAttach.Storage {
 
-    internal enum PartitionStyle { Unknown = 0, Mbr = 1, Gpt = 2, Raw = 3 }
+    /// <summary>
+    /// MSFT_Disk.PartitionStyle: 0 means not initialized (shown as RAW by Get-Disk).
+    /// </summary>
+    internal enum PartitionStyle { Raw = 0, Mbr = 1, Gpt = 2 }
 
     internal sealed class DiskInfo {
         public int Number { get; set; }

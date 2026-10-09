@@ -4,7 +4,7 @@ title: Website deployment and search indexing
 scope: VHD-Studio/site
 specificity: exact
 credibility: inferred
-generated: {at: 2026-10-08, by: agent}
+generated: {at: 2026-10-09, by: agent}
 sources: [site/index.html, site/sitemap.xml, .github/workflows/pages.yml, Source/Directory.Build.props, docs/images]
 links: [../decisions/001-landing-page-via-github-actions.md]
 ---
@@ -14,9 +14,8 @@ links: [../decisions/001-landing-page-via-github-actions.md]
 ## Summary
 The landing page at https://tgundhus.github.io/VHD-Studio/ is the static page in `site/`, published to
 GitHub Pages by `.github/workflows/pages.yml`. It is the URL we register with Google Search Console,
-because `github.com` itself can't be verified by us. The assembly step was run and checked locally;
-the deploy steps and the Search Console flow have not yet been run against GitHub, hence
-`credibility: inferred`.
+because `github.com` itself can't be verified by us. The workflow ran successfully on GitHub on
+2026-10-09 (Website run #1). The Search Console flow has not been run yet, hence `credibility: inferred`.
 
 ## Behavior / structure
 - **Triggers:** a push to `master` that touches `site/**`, `docs/images/**`,
@@ -41,9 +40,13 @@ the deploy steps and the Search Console flow have not yet been run against GitHu
 
 ### One-time: switch Pages to the workflow
 1. Repository → Settings → Pages → Build and deployment → Source: **GitHub Actions**.
-   Until then Pages keeps rendering the repository root with Jekyll, and the `deploy` job fails.
-2. Merge the change to `master`, or run the Website workflow manually if it is already merged.
-3. Open https://tgundhus.github.io/VHD-Studio/ and check that the version and images show.
+   Until then GitHub also runs its own "pages build and deployment" (Jekyll rendering of the
+   repository root) on every push to `master`. Both deploy successfully, and the site shows whichever
+   finished last. On 2026-10-09 the Jekyll deploy finished about 9 seconds after this workflow's.
+2. Run the Website workflow once (Actions → Website → Run workflow) so the landing page is the last
+   deployment.
+3. Open https://tgundhus.github.io/VHD-Studio/ and check that the version and images show. The README
+   rendering instead means step 1 hasn't taken effect.
 
 ### One-time: Google Search Console
 1. https://search.google.com/search-console → Add property → **URL prefix** →

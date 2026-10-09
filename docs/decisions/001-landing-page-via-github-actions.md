@@ -41,8 +41,8 @@ at build time. `.github/workflows/pages.yml` assembles and deploys it, and the P
   root of a C# repository and still needs an exclude list maintained by hand.
 
 ## Consequences
-- The maintainer must switch Settings → Pages → Source to "GitHub Actions" once; until then the
-  `deploy` job fails.
+- The maintainer must switch Settings → Pages → Source to "GitHub Actions" once. Until then GitHub's
+  own Jekyll build also deploys on every push to `master`, and whichever deploy finishes last wins.
 - `site/index.html` duplicates claims from `README.md` and must be kept in sync by hand.
 - A custom domain can be added later through the Pages settings without changing the workflow.
 

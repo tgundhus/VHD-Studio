@@ -28,3 +28,8 @@ Read this when you want to know what changed in the documentation and when. Appe
 - Corrected [operations/website.md](operations/website.md) and decision 001: with the Pages source
   still on "Deploy from a branch", the `deploy` job does not fail. GitHub's Jekyll build deploys as
   well, and the later deploy wins.
+
+## 2026-10-10
+- Added [product/password-protection-design.md](product/password-protection-design.md) and
+  `product/index.md`: proposal to password-protect disks with BitLocker inside the VHDX, with the
+  options that were ruled out. Not built.

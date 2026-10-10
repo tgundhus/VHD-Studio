@@ -13,6 +13,7 @@ Read this when you want to know where VHD Studio's documentation lives and which
 
 | Question | Where |
 |---|---|
+| What does it do, or what is planned? | [product/](product/index.md): feature designs and proposals |
 | How is it kept safe? | [SAFETY.md](SAFETY.md): the data-safety model, safeguards by area and how they are tested |
 | How do we run it? | [operations/](operations/index.md): website deployment and search indexing |
 | Why is it this way? | [decisions/](decisions/index.md): numbered decision records |

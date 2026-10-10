@@ -11,6 +11,7 @@
     <Compile Include="..\VhdAttach-Service\PipeCaller.cs" Link="Shared\PipeCaller.cs" />
     <Compile Include="..\VhdAttach-Service\AttachHelper.cs" Link="Shared\AttachHelper.cs" />
     <Compile Include="..\VhdAttach-Service\DiskIO.cs" Link="Shared\DiskIO.cs" />
+    <Compile Include="..\VhdAttach-Service\DriveLetterMemory.cs" Link="Shared\DriveLetterMemory.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Medo.Net;
@@ -53,8 +54,7 @@ namespace VhdAttachService {
                 try {
                     switch (packet.Operation) {
                         case "Attach":
-                            ReceivedAttach(packet, caller);
-                            return GetResponse(packet);
+                            return GetResponse(packet, ReceivedAttach(packet, caller));
 
                         case "Detach":
                             ReceivedDetach(packet, caller);
@@ -100,7 +100,7 @@ namespace VhdAttachService {
 
 
 
-        private static void ReceivedAttach(TinyPacket packet, PipeCaller caller) {
+        private static string ReceivedAttach(TinyPacket packet, PipeCaller caller) {
             try {
                 var file = new FileWithOptions(packet["Path"]) {
                     ReadOnly = packet["MountReadOnly"].Equals("True", StringComparison.OrdinalIgnoreCase),
@@ -108,9 +108,11 @@ namespace VhdAttachService {
                     MountFolder = string.IsNullOrEmpty(packet["MountFolder"]) ? null : packet["MountFolder"],
                 };
                 var shouldInitialize = packet["InitializeDisk"].Equals("True", StringComparison.OrdinalIgnoreCase);
+                var avoid = new HashSet<char>((packet["AvoidLetters"] ?? "").ToUpperInvariant().Where(c => (c >= 'A') && (c <= 'Z'))); //the user's network and subst drives
                 AuditLog.Started("Attach", file.ToString(), shouldInitialize ? "initialize new disk" : null, caller.Name);
-                AttachHelper.Attach(file, caller, shouldInitialize);
-                AuditLog.Succeeded("Attach", file.ToString(), null, caller.Name);
+                var driveLetters = AttachHelper.Attach(file, caller, shouldInitialize, avoidLetters: avoid);
+                AuditLog.Succeeded("Attach", file.ToString(), string.IsNullOrEmpty(driveLetters) ? null : "drive letters " + driveLetters, caller.Name);
+                return driveLetters;
             } catch (Exception ex) {
                 AuditLog.Failed("Attach", packet["Path"], ex, caller.Name);
                 throw new InvalidOperationException(string.Format("Virtual disk file \"{0}\" cannot be attached.", (new FileInfo(packet["Path"])).Name), ex);
@@ -212,8 +214,8 @@ namespace VhdAttachService {
         private static void ReceivedChangeDriveLetter(TinyPacket packet, PipeCaller caller) {
             try {
                 var volume = new Volume(packet["VolumeName"]);
+                var backingFile = GetVirtualDiskFile(volume.PhysicalDriveNumber);
                 if (!caller.IsAdministrator) { //non-admins may only re-letter volumes of virtual disks they can access
-                    var backingFile = GetVirtualDiskFile(volume.PhysicalDriveNumber);
                     if (backingFile == null) { throw new UnauthorizedAccessException("Only volumes on virtual disks can be changed without administrator rights."); }
                     using (caller.GuardFile(backingFile, FileAccess.Read)) { }
                 }
@@ -223,6 +225,7 @@ namespace VhdAttachService {
                 } else {
                     volume.ChangeLetter(newDriveLetter);
                 }
+                if (backingFile != null) { DriveLetterMemory.Remember(backingFile, volume); } //the user's choice is the disk's letter from now on
             } catch (Exception ex) {
                 Medo.Diagnostics.ErrorReport.SaveToTemp(ex);
                 throw new InvalidOperationException("Cannot change drive letter.", ex);
@@ -250,10 +253,12 @@ namespace VhdAttachService {
         }
 
 
-        public static TinyPacket GetResponse(TinyPacket packet) {
+        /// <param name="driveLetters">Drive letter notices of an attach (see DriveLetterMemory.Apply).</param>
+        public static TinyPacket GetResponse(TinyPacket packet, string driveLetters = null) {
             var data = new Dictionary<string, string>();
             data.Add("IsError", false.ToString(CultureInfo.InvariantCulture));
             data.Add("Message", "");
+            if (!string.IsNullOrEmpty(driveLetters)) { data.Add("DriveLetters", driveLetters); }
             return new TinyPacket(packet.Product, packet.Operation, data);
         }
 

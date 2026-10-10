@@ -47,6 +47,7 @@ namespace VhdAttach {
         private void bw_DoWork(object sender, DoWorkEventArgs e) {
             this._exceptions = new List<Exception>();
             this._notices = new List<string>();
+            var avoidLetters = GetSessionLetters();
             FileInfo iFile = null;
             try {
                 for (var i = 0; i < this.Files.Count; ++i) {
@@ -54,11 +55,11 @@ namespace VhdAttach {
                     bw.ReportProgress(-1, iFile.Name);
 
                     Utility.FixServiceErrorsIfNeeded();
-                    var res = PipeClient.Attach(iFile.FullName, this.MountReadOnly, this.InitializeDisk);
+                    var res = PipeClient.Attach(iFile.FullName, this.MountReadOnly, this.InitializeDisk, avoidLetters: avoidLetters);
                     if (res.IsError) {
                         this._exceptions.Add(new InvalidOperationException(iFile.Name, new Exception(res.Message)));
-                    } else if (!this.InitializeDisk) {
-                        this._notices.AddRange(ResolveLetterConflicts(iFile));
+                    } else {
+                        this._notices.AddRange(DriveLetters.FormatNotices(res.DriveLetters));
                     }
                 }
             } catch (IOException) {
@@ -70,15 +71,15 @@ namespace VhdAttach {
         }
 
         /// <summary>
-        /// Windows may give the disk a letter this user already uses for a network or subst drive.
+        /// Letters this user uses for network or subst drives; the service keeps attached disks off them.
         /// Never fails the attach.
         /// </summary>
-        private static IEnumerable<string> ResolveLetterConflicts(FileInfo file) {
+        private static string GetSessionLetters() {
             try {
-                return DriveLetters.ResolveConflicts(file.FullName);
+                return DriveLetters.GetSessionLetters();
             } catch (Exception ex) {
-                Debug.WriteLine("VhdAttach: Drive letter check failed for " + file.FullName + ": " + ex.Message);
-                return Array.Empty<string>();
+                Debug.WriteLine("VhdAttach: Drive letter check failed: " + ex.Message);
+                return "";
             }
         }
 

@@ -36,3 +36,6 @@ Read this when you want to know what changed in the documentation and when. Appe
 - Added [product/drive-letters.md](product/drive-letters.md): fix for attached disks getting a drive
   letter the user already uses for a network or subst drive, and for a refused letter change leaving a
   volume without a letter.
+- Rewrote [product/drive-letters.md](product/drive-letters.md): the service now remembers each volume's
+  last drive letter and restores it on every attach, or gives a free one; the user's network and subst
+  letters are sent by the UI with each attach. Replaces the UI-side letter move from earlier today.

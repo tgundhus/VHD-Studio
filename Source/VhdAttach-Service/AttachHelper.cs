@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -14,7 +15,9 @@ namespace VhdAttachService {
 
         /// <param name="caller">User on whose behalf the service acts; PipeCaller.ForService() for boot-time auto-attach.</param>
         /// <param name="strictPaths">Also refuse hard-linked files (used for auto-attach entries, which non-admins may have added).</param>
-        public static void Attach(FileWithOptions file, PipeCaller caller, bool initializeDisk = false, bool strictPaths = false) {
+        /// <param name="avoidLetters">Drive letters the user uses for network or subst drives (see DriveLetterMemory).</param>
+        /// <returns>Drive letter notices for the user (see DriveLetterMemory.Apply); empty if none.</returns>
+        public static string Attach(FileWithOptions file, PipeCaller caller, bool initializeDisk = false, bool strictPaths = false, ISet<char> avoidLetters = null) {
             if (!File.Exists(file.FileName)) {
                 var missing = file.FileName;
                 if (missing.StartsWith(@"\\", StringComparison.Ordinal)) {
@@ -24,11 +27,11 @@ namespace VhdAttachService {
             }
             using (var fileGuard = caller.GuardFile(file.FileName, (file.ReadOnly && !initializeDisk) ? FileAccess.Read : FileAccess.ReadWrite, strictPaths))
             using (var folderGuard = string.IsNullOrEmpty(file.MountFolder) ? null : caller.GuardMountFolder(file.MountFolder)) {
-                AttachPinned(file, fileGuard?.FinalPath ?? file.FileName, folderGuard?.FinalPath, initializeDisk, caller);
+                return AttachPinned(file, fileGuard?.FinalPath ?? file.FileName, folderGuard?.FinalPath, initializeDisk, caller, avoidLetters ?? new HashSet<char>());
             }
         }
 
-        private static void AttachPinned(FileWithOptions file, string path, string mountFolder, bool initializeDisk, PipeCaller caller) {
+        private static string AttachPinned(FileWithOptions file, string path, string mountFolder, bool initializeDisk, PipeCaller caller, ISet<char> avoidLetters) {
             if (!File.Exists(path)) {
                 if (path.StartsWith(@"\\", StringComparison.Ordinal)) {
                     throw new FileNotFoundException(string.Format("Network file \"{0}\" is not reachable by the service. The service runs as Local System; give the computer account access to the share or change the service log-on account.", path), path);
@@ -51,6 +54,7 @@ namespace VhdAttachService {
                 }
             }
 
+            var wantsLetters = !initializeDisk && (mountFolder == null) && !file.NoDriveLetter;
             string diskPath = null;
             using (var disk = new Medo.IO.VirtualDisk(path)) {
                 var access = Medo.IO.VirtualDiskAccessMask.All;
@@ -67,7 +71,7 @@ namespace VhdAttachService {
                     throw new IOException(string.Format("\"{0}\" has the read-only attribute (for example a protected differencing parent). Attach it read-only, or clear the attribute deliberately.", Path.GetFileName(path)), ex);
                 }
                 disk.Attach(options);
-                if (initializeDisk || (mountFolder != null)) { diskPath = disk.GetAttachedPath(); }
+                if (initializeDisk || (mountFolder != null) || wantsLetters) { diskPath = disk.GetAttachedPath(); }
             }
 
             if (initializeDisk) { DiskIO.InitializeDisk(diskPath); } //refuses anything that is not blank
@@ -75,6 +79,15 @@ namespace VhdAttachService {
             if ((mountFolder != null) && (diskPath != null)) {
                 MountFirstVolume(diskPath, mountFolder);
             }
+
+            if (wantsLetters && (diskPath != null)) {
+                try {
+                    return DriveLetterMemory.Apply(path, diskPath, avoidLetters);
+                } catch (Exception ex) { //the disk is attached; a drive letter problem must not turn that into a failure
+                    Trace.TraceWarning("Drive letters of \"" + path + "\" were not checked: " + ex.Message);
+                }
+            }
+            return "";
         }
 
         /// <summary>

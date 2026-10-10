@@ -5,47 +5,55 @@ scope: VHD-Studio/attach
 specificity: exact
 credibility: inferred
 generated: {at: 2026-10-10, by: agent}
-sources: [Source/VhdAttach/DriveLetters.cs, Source/VhdAttach/AttachForm.cs, Source/VhdAttach/ChangeDriveLetterForm.cs, Source/VhdAttach-Service/Volume.cs, Source/VhdAttach-Test/DriveLetterTest.cs]
+sources: [Source/VhdAttach-Service/DriveLetterMemory.cs, Source/VhdAttach-Service/AttachHelper.cs, Source/VhdAttach-Service/PipeServer.cs, Source/VhdAttach-Service/Volume.cs, Source/VhdAttach/DriveLetters.cs, Source/VhdAttach/AttachForm.cs, Source/VhdAttach/ChangeDriveLetterForm.cs, Source/VhdAttach-Test/DriveLetterTest.cs]
 links: [../SAFETY.md]
 ---
 
 # Drive letters of attached disks
 
 ## Summary
-Windows assigns drive letters when the service attaches a disk. Because the service runs as Local System,
-Windows only sees global drives, not the mapped network drives and `subst` drives in the user's own
-sign-in session. After an interactive attach, VHD Studio checks the letters from the user's session and
-moves the disk off any letter the user already uses. Compiles; the elevated tests have not run on
-Windows yet, hence `credibility: inferred`.
+Every volume of a virtual disk gets the drive letter it had last time. If that letter is taken, the
+volume gets a free letter instead. Letters the user uses for network or subst drives are never used.
+The service keeps its own record because Windows forgets a volume's letter as soon as another drive takes
+it. Compiles; the elevated tests have not run on Windows yet, hence `credibility: inferred`.
 
 ## Behavior
-- **Who picks the letter:** Windows' mount manager, in the global namespace. VHD Studio never chooses a
-  letter at attach time, except when moving off a conflict.
-- **Conflict check** (`DriveLetters.GetConflict`, runs in the UI process after `AttachForm` attaches a
-  disk, not for new blank disks): a volume's letter conflicts when
-  1. the user has a network connection on it, connected or remembered but not connected
-     (`WNetGetConnection`, or `HKCU\Network\<letter>`), or
-  2. the user's session resolves the letter to something other than the volume
-     (`QueryDosDevice` on the letter vs. on the volume's `Volume{GUID}` name), e.g. a `subst` drive.
-- **Resolution:** the volume moves to the first letter from D: that is free in the user's session and
-  not remembered for a network drive, through the service (`ChangeDriveLetter`). The user sees one
-  message per moved volume. Windows remembers the new letter for that volume, so later attaches and
-  auto-mount at startup reuse it.
-- **Waiting:** letters appear shortly after the disk arrives; the check polls for up to 3 seconds until
-  any volume has a letter. Disks with no lettered volume add that wait to the attach.
-- **Change drive letter:** the list excludes letters in use in the session and remembered network
-  drives. `Volume.ChangeLetter` refuses a letter that is already in use before removing the current one,
-  and restores the old letter if Windows rejects the new one.
-- **Failures never fail the attach:** an exception in the check is ignored; a failed move is reported.
+- **Record:** `HKLM\Software\xGND Software\VHD Studio\DriveLetters`, one value per disk file (plain long
+  path, case-insensitive), data `partitionOffset=Letter;...`. Written only by the service.
+- **When it applies:** every attach through `AttachHelper.Attach` that gives letters: interactive attach
+  and auto-mount at startup, read-only attaches included. Not for new blank disks, mount
+  folders, "no drive letter" entries or ISO images.
+- **Per volume, after Windows has assigned letters** (`DriveLetterMemory.Apply`, waits up to 3 s for the
+  first letter):
+  1. A letter is remembered and it is not one of the user's own (see below):
+     - free → the volume is moved back to it;
+     - in use by another drive → the volume keeps (or gets) a free letter this time, and the remembered
+       letter is kept for the next attach. Notice `taken`.
+  2. The volume has no letter, or its letter is one of the user's own → it moves to the first free letter
+     from D: that isn't one of the user's own. Notice `inuse` (or `nofree` if none is free).
+  3. Nothing remembered yet, or the remembered letter is now one of the user's own → the volume's final
+     letter is recorded.
+  4. A volume with no letter and nothing remembered (recovery partition, letter removed by the user) is
+     left alone.
+- **The user's own letters:** the UI sends `AvoidLetters` with each attach: letters with a network
+  connection (connected, or remembered under `HKCU\Network`) and subst drives (`QueryDosDevice` target
+  starting with `\??\`). They live in the user's logon session, which the service can't see. Auto-mount
+  at startup runs with none.
+- **Messages:** the service returns notices in the attach response (`DriveLetters`, e.g.
+  `inuse:Z:G;taken:E:F`); `DriveLetters.FormatNotices` turns them into one message per volume, naming the
+  network path or subst folder where known.
+- **Change drive letter:** the list excludes letters in use in the session and remembered network drives.
+  After a change the service records the new letter as the volume's letter (removing the letter forgets
+  it). `Volume.ChangeLetter` refuses a letter that is already in use before removing the current one, and
+  restores the old letter if Windows rejects the new one.
+- **Failures never fail the attach:** letter problems are traced and skipped.
 
 ## Constraints
-- Auto-mount at startup runs before anyone signs in, so it can't see the user's drives. A disk that has
-  only ever been auto-mounted keeps a conflicting letter until it is attached once from the UI or its
-  letter is changed; after that Windows remembers the new letter.
-- An elevated VHD Studio window can't see non-remembered network drives mapped in the non-elevated
-  session (Windows keeps separate drive maps). Remembered ones are still detected through the registry.
-- ISO images are not checked: their volumes are found by letter in the user's session, which a
-  conflicting drive hides.
+- At startup no user is signed in, so startup auto-mount can't avoid the user's network drives. Once an
+  interactive attach has moved a disk off such a letter, the new letter is the one remembered.
+- An elevated VHD Studio window can't see network drives mapped in the non-elevated session unless they
+  are remembered (Windows keeps separate drive maps); remembered ones are read from the registry.
+- Records of deleted disk files are not cleaned up; each is one short registry value.
 
 ## Related
 - [SAFETY.md](../SAFETY.md): letter changes must never leave a volume unreachable.

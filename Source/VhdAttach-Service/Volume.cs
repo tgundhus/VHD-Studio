@@ -57,7 +57,7 @@ namespace VhdAttachCommon {
             if (letter == null) { throw new ArgumentOutOfRangeException(nameof(newLetter), "Drive letter expected."); }
             var oldLetter = this.DriveLetter3;
             if (letter == oldLetter) { return; } //nothing to do
-            if (NativeMethods.QueryDosDevice(letter.Substring(0, 2), new StringBuilder(260), 260) > 0) {
+            if (IsLetterInUse(letter[0])) {
                 throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, "Drive letter {0} is already in use.", letter.Substring(0, 2)));
             }
 
@@ -67,6 +67,14 @@ namespace VhdAttachCommon {
                 if (oldLetter != null) { NativeMethods.SetVolumeMountPoint(oldLetter, this.VolumeName); } //keep the volume reachable
                 throw error;
             }
+        }
+
+        /// <summary>
+        /// True if the drive letter exists in this process's view: global drives plus this logon session's own
+        /// (mapped network and subst drives). The service sees only global drives.
+        /// </summary>
+        public static bool IsLetterInUse(char letter) {
+            return NativeMethods.QueryDosDevice(letter + ":", new StringBuilder(1024), 1024) > 0;
         }
 
         public void RemoveLetter() {

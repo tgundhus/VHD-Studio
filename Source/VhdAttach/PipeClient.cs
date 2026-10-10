@@ -6,13 +6,15 @@ using System.Threading;
 namespace VhdAttach {
     internal static class PipeClient {
 
-        public static PipeResponse Attach(string path, bool mountReadOnly, bool initializeDisk, bool noDriveLetter = false, string mountFolder = null) {
+        /// <param name="avoidLetters">Letters the user uses for network or subst drives, which the service can't see.</param>
+        public static PipeResponse Attach(string path, bool mountReadOnly, bool initializeDisk, bool noDriveLetter = false, string mountFolder = null, string avoidLetters = null) {
             var data = new Dictionary<string, string>();
             data.Add("Path", PathHelper.ToServicePath(path));
             data.Add("MountReadOnly", mountReadOnly.ToString(CultureInfo.InvariantCulture));
             data.Add("InitializeDisk", initializeDisk.ToString(CultureInfo.InvariantCulture));
             data.Add("NoDriveLetter", noDriveLetter.ToString(CultureInfo.InvariantCulture));
             data.Add("MountFolder", mountFolder ?? "");
+            data.Add("AvoidLetters", avoidLetters ?? "");
             return Send("Attach", data, 30000); //log replay and mount folders can take a while
         }
 
@@ -129,7 +131,7 @@ namespace VhdAttach {
                 if (Pipe.HasBytesToRead) {
                     var buffer = Pipe.ReadAvailable();
                     var packetIn = Medo.Net.TinyPacket.Parse(buffer);
-                    return new PipeResponse(bool.Parse(packetIn["IsError"]), packetIn["Message"], packetIn["ErrorCode"]);
+                    return new PipeResponse(bool.Parse(packetIn["IsError"]), packetIn["Message"], packetIn["ErrorCode"], packetIn["DriveLetters"]);
                 } else {
                     return new PipeResponse(true, "The service did not answer in time. The operation may still finish; refresh before trying again.");
                 }

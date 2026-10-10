@@ -4,76 +4,25 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading;
 using Microsoft.Win32;
-using VhdAttachCommon;
 
 namespace VhdAttach {
 
     /// <summary>
-    /// The service attaches disks as Local System, so Windows picks their drive letters in the global namespace.
-    /// Mapped network drives and subst drives exist only in the user's own logon session, so a new volume can get
-    /// a letter the user already uses; that letter then keeps showing the other drive. This class runs in the
-    /// user's session, where both are visible.
+    /// Drive letters as this user sees them. Mapped network drives and subst drives exist only in the user's own
+    /// logon session, so the service (Local System) can't see them; the UI tells it which letters to keep disks off.
     /// </summary>
     internal static class DriveLetters {
 
         /// <summary>
-        /// Moves every volume of an attached disk off drive letters this user already uses.
-        /// Returns one message per volume that was moved or could not be moved.
+        /// Letters this user uses for network drives (connected or remembered) and subst drives, e.g. "HSZ".
         /// </summary>
-        public static IList<string> ResolveConflicts(string fileName) {
-            string attachedPath;
-            using (var disk = new Medo.IO.VirtualDisk(fileName)) {
-                disk.Open(Medo.IO.VirtualDiskAccessMask.GetInfo | Medo.IO.VirtualDiskAccessMask.Detach); //GetAttachedPath requires Detach access
-                attachedPath = disk.GetAttachedPath();
+        public static string GetSessionLetters() {
+            var letters = new StringBuilder();
+            for (var letter = 'A'; letter <= 'Z'; letter++) {
+                if (Describe(letter) != null) { letters.Append(letter); }
             }
-
-            var notes = new List<string>();
-            foreach (var volume in WaitForLetters(attachedPath)) {
-                var conflict = GetConflict(volume);
-                if (conflict == null) { continue; }
-
-                var letter = volume.DriveLetter2;
-                var free = FindFreeLetter();
-                if (free == null) {
-                    notes.Add(string.Format(CultureInfo.CurrentCulture, "Drive letter {0} is also used by {1}, and no other letter is free. Free a letter, then use Drive → Change drive letter.", letter, conflict));
-                    continue;
-                }
-                var res = PipeClient.ChangeDriveLetter(volume.VolumeName, free + "\\");
-                notes.Add(res.IsError
-                    ? string.Format(CultureInfo.CurrentCulture, "Drive letter {0} is also used by {1}. Moving the disk to {2} failed: {3}", letter, conflict, free, res.Message)
-                    : string.Format(CultureInfo.CurrentCulture, "Drive letter {0} is already used by {1}, so the disk was given {2} instead.", letter, conflict, free));
-            }
-            return notes;
-        }
-
-        /// <summary>
-        /// Returns what this user sees at the volume's drive letter when it is not the volume itself
-        /// (a network path, a subst folder, or "another drive"), or null when there is no conflict.
-        /// </summary>
-        public static string GetConflict(Volume volume) {
-            var letter = volume.DriveLetter2; //as Windows assigned it, in the global namespace
-            if (letter == null) { return null; }
-
-            var network = GetNetworkPath(letter);
-            if (network != null) { return network; } //also when not connected yet: it would fail to reconnect
-
-            var seen = QueryTarget(letter); //this session's own drives take precedence over global ones
-            var own = QueryTarget(volume.VolumeName.Substring(4).TrimEnd('\\')); //\\?\Volume{...}\ → \Device\HarddiskVolumeN
-            if ((seen == null) || (own == null) || string.Equals(seen, own, StringComparison.OrdinalIgnoreCase)) { return null; }
-            return seen.StartsWith(@"\??\", StringComparison.Ordinal) ? seen.Substring(4) : "another drive";
-        }
-
-        /// <summary>
-        /// Returns the first drive letter from D: that this user doesn't use (e.g. "F:"), or null.
-        /// </summary>
-        public static string FindFreeLetter() {
-            var used = GetUsedLetters();
-            for (var letter = 'D'; letter <= 'Z'; letter++) {
-                if (!used.Contains(letter)) { return letter + ":"; }
-            }
-            return null;
+            return letters.ToString();
         }
 
         /// <summary>
@@ -83,22 +32,42 @@ namespace VhdAttach {
         public static ISet<char> GetUsedLetters() {
             var used = new HashSet<char>();
             for (var letter = 'A'; letter <= 'Z'; letter++) {
-                var drive = letter + ":";
-                if ((QueryTarget(drive) != null) || (GetNetworkPath(drive) != null)) { used.Add(letter); }
+                if ((QueryTarget(letter + ":") != null) || (GetNetworkPath(letter + ":") != null)) { used.Add(letter); }
             }
             return used;
         }
 
-
-        private static IList<Volume> WaitForLetters(string attachedPath) {
-            if (attachedPath == null) { return Array.Empty<Volume>(); }
-            var volumes = Volume.GetVolumesOnPhysicalDrive(attachedPath);
-            for (var i = 0; (i < 12) && !volumes.Any(v => v.DriveLetter2 != null); i++) { //Windows assigns letters shortly after the disk arrives
-                Thread.Sleep(250);
-                volumes = Volume.GetVolumesOnPhysicalDrive(attachedPath);
-            }
-            return volumes;
+        /// <summary>
+        /// The network path or subst folder this user has on the letter, or null.
+        /// </summary>
+        public static string Describe(char letter) {
+            var drive = letter + ":";
+            var network = GetNetworkPath(drive);
+            if (network != null) { return network; }
+            var target = QueryTarget(drive);
+            return ((target != null) && target.StartsWith(@"\??\", StringComparison.Ordinal)) ? target.Substring(4) : null; //subst
         }
+
+        /// <summary>
+        /// Turns the service's drive letter notices of an attach (e.g. "inuse:Z:G;taken:E:F") into messages.
+        /// </summary>
+        public static IList<string> FormatNotices(string notices) {
+            var messages = new List<string>();
+            foreach (var entry in (notices ?? "").Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)) {
+                var parts = entry.Split(':');
+                if ((parts.Length != 3) || (parts[1].Length != 1)) { continue; }
+                var from = parts[1] + ":";
+                var to = parts[2] + ":";
+                var owner = Describe(parts[1][0]) ?? "another drive";
+                switch (parts[0]) {
+                    case "inuse": messages.Add(string.Format(CultureInfo.CurrentCulture, "Drive letter {0} is already used by {1}, so the disk was given {2} instead. It keeps {2} from now on.", from, owner, to)); break;
+                    case "taken": messages.Add(string.Format(CultureInfo.CurrentCulture, "The disk normally uses {0}, but another drive has that letter right now, so the disk was given {1} this time.", from, to)); break;
+                    case "nofree": messages.Add(string.Format(CultureInfo.CurrentCulture, "Drive letter {0} is also used by {1}, and no other letter is free. Free a letter, then use Drive → Change drive letter.", from, owner)); break;
+                }
+            }
+            return messages;
+        }
+
 
         private static string GetNetworkPath(string drive) {
             var buffer = new StringBuilder(1024);

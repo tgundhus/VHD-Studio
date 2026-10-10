@@ -13,5 +13,5 @@ Read this when you want to know what VHD Studio does or is planned to do, and ho
 
 - [password-protection-design.md](password-protection-design.md): proposal for password-protected
   disks using BitLocker inside the VHDX, and the alternatives that were ruled out.
-- [drive-letters.md](drive-letters.md): how attached disks get drive letters, and how VHD Studio avoids
-  letters the user already uses for network or subst drives.
+- [drive-letters.md](drive-letters.md): how attached disks get their last drive letter back, or a free
+  one, and stay off letters the user uses for network or subst drives.

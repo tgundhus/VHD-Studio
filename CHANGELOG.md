@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- An attached disk could get a drive letter you already use for a mapped network drive or a `subst`
+  drive. The service attaches disks for all users, so Windows can't see drives that exist only in your
+  sign-in session, and that letter kept showing the other drive. After attaching, VHD Studio now checks
+  the disk's letters from your session (including remembered network drives that aren't connected yet)
+  and moves the disk to the next free letter, telling you once. Windows remembers the new letter, so
+  later attaches and auto-mount at startup use it too.
+- **Drive → Change drive letter** no longer offers letters of remembered network drives.
+- Changing to a letter that is already in use removed the disk's current letter and left it without one.
+  The change is now refused up front, and the old letter is put back if Windows rejects the new one.
+
 ## 5.0.2
 
 ### Fixed

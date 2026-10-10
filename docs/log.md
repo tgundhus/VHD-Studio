@@ -33,3 +33,6 @@ Read this when you want to know what changed in the documentation and when. Appe
 - Added [product/password-protection-design.md](product/password-protection-design.md) and
   `product/index.md`: proposal to password-protect disks with BitLocker inside the VHDX, with the
   options that were ruled out. Not built.
+- Added [product/drive-letters.md](product/drive-letters.md): fix for attached disks getting a drive
+  letter the user already uses for a network or subst drive, and for a refused letter change leaving a
+  volume without a letter.

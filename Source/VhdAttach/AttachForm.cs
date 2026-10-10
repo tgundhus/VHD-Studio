@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
@@ -12,6 +13,7 @@ namespace VhdAttach {
         private readonly bool MountReadOnly;
         private readonly bool InitializeDisk;
         private List<Exception> _exceptions;
+        private List<string> _notices;
 
         private AttachForm() {
             InitializeComponent();
@@ -44,6 +46,7 @@ namespace VhdAttach {
 
         private void bw_DoWork(object sender, DoWorkEventArgs e) {
             this._exceptions = new List<Exception>();
+            this._notices = new List<string>();
             FileInfo iFile = null;
             try {
                 for (var i = 0; i < this.Files.Count; ++i) {
@@ -54,6 +57,8 @@ namespace VhdAttach {
                     var res = PipeClient.Attach(iFile.FullName, this.MountReadOnly, this.InitializeDisk);
                     if (res.IsError) {
                         this._exceptions.Add(new InvalidOperationException(iFile.Name, new Exception(res.Message)));
+                    } else if (!this.InitializeDisk) {
+                        this._notices.AddRange(ResolveLetterConflicts(iFile));
                     }
                 }
             } catch (IOException) {
@@ -62,6 +67,19 @@ namespace VhdAttach {
                 this._exceptions.Add(new InvalidOperationException(iFile.Name, ex));
             }
             if (this._exceptions.Count > 0) { throw new InvalidOperationException(); }
+        }
+
+        /// <summary>
+        /// Windows may give the disk a letter this user already uses for a network or subst drive.
+        /// Never fails the attach.
+        /// </summary>
+        private static IEnumerable<string> ResolveLetterConflicts(FileInfo file) {
+            try {
+                return DriveLetters.ResolveConflicts(file.FullName);
+            } catch (Exception ex) {
+                Debug.WriteLine("VhdAttach: Drive letter check failed for " + file.FullName + ": " + ex.Message);
+                return Array.Empty<string>();
+            }
         }
 
         private void bw_ProgressChanged(object sender, ProgressChangedEventArgs e) {
@@ -81,6 +99,9 @@ namespace VhdAttach {
                 foreach (var iException in this._exceptions) {
                     Medo.MessageBox.ShowError(this, string.Format("Virtual disk file \"{0}\" cannot be attached.\n\n{1}", iException.Message, iException.InnerException.Message));
                 }
+            }
+            if ((this._notices != null) && (this._notices.Count > 0)) {
+                Medo.MessageBox.ShowInformation(this, string.Join("\n\n", this._notices));
             }
             this.Close();
         }

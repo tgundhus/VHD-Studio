@@ -3,8 +3,9 @@ type: concept
 title: Drive letters of attached disks
 scope: VHD-Studio/attach
 specificity: exact
-credibility: inferred
+credibility: verified
 generated: {at: 2026-10-10, by: agent}
+verified: {at: 2026-10-11, by: ci}
 sources: [Source/VhdAttach-Service/DriveLetterMemory.cs, Source/VhdAttach-Service/AttachHelper.cs, Source/VhdAttach-Service/PipeServer.cs, Source/VhdAttach-Service/Volume.cs, Source/VhdAttach/DriveLetters.cs, Source/VhdAttach/AttachForm.cs, Source/VhdAttach/ChangeDriveLetterForm.cs, Source/VhdAttach-Test/DriveLetterTest.cs]
 links: [../SAFETY.md]
 ---
@@ -15,7 +16,7 @@ links: [../SAFETY.md]
 Every volume of a virtual disk gets the drive letter it had last time. If that letter is taken, the
 volume gets a free letter instead. Letters the user uses for network or subst drives are never used.
 The service keeps its own record because Windows forgets a volume's letter as soon as another drive takes
-it. Compiles; the elevated tests have not run on Windows yet, hence `credibility: inferred`.
+it. Verified on Windows by the elevated tests in `DriveLetterTest` (Build #14, 2026-10-11).
 
 ## Behavior
 - **Record:** `HKLM\Software\xGND Software\VHD Studio\DriveLetters`, one value per disk file (plain long

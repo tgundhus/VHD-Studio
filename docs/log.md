@@ -39,3 +39,8 @@ Read this when you want to know what changed in the documentation and when. Appe
 - Rewrote [product/drive-letters.md](product/drive-letters.md): the service now remembers each volume's
   last drive letter and restores it on every attach, or gives a free one; the user's network and subst
   letters are sent by the UI with each attach. Replaces the UI-side letter move from earlier today.
+
+## 2026-10-11
+- Merged the drive-letter changes to `master` (4ae993a). Build #14 on Windows passed, including the three
+  new elevated `DriveLetterTest` tests (22 of 22 elevated tests); marked
+  [product/drive-letters.md](product/drive-letters.md) as verified.

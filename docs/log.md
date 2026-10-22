@@ -44,3 +44,6 @@ Read this when you want to know what changed in the documentation and when. Appe
 - Merged the drive-letter changes to `master` (4ae993a). Build #14 on Windows passed, including the three
   new elevated `DriveLetterTest` tests (22 of 22 elevated tests); marked
   [product/drive-letters.md](product/drive-letters.md) as verified.
+
+## 2026-10-22
+- Version 5.0.3: the changelog's "Unreleased" section became 5.0.3.

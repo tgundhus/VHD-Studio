@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 5.0.3
 
 ### Improved
 - A disk gets its last drive letter back. Windows forgets a disk's letter as soon as another drive (for

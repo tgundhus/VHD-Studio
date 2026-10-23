@@ -94,7 +94,14 @@ namespace VhdAttach {
                     using (VolumeLock.Acquire(volumes.Select(v => v.VolumeName).ToList(), volumes.Select(v => v.DriveLetter2 ?? v.VolumeName).ToList(), force: false)) {
                         image.Detach();
                     }
-                    if (VirtualDiskImage.GetDetails(fileName).AttachedPath != null) { throw new IOException("The new disk is still attached."); }
+                    var stillAttached = true;
+                    try { image.GetAttachedPath(); }
+                    catch (IOException) {
+                        // This wrapper maps only ERROR_DEV_NOT_EXIST to IOException;
+                        // all other native failures remain Win32Exception and abort.
+                        stillAttached = false;
+                    }
+                    if (stillAttached) { throw new IOException("The new disk is still attached."); }
                 } catch (Exception detachError) {
                     throw new IOException("The new disk could not be safely detached. Keep the image and close any programs using it before detaching; it has not been soft protected."
                         + Environment.NewLine + (failure == null ? "" : failure.Message + Environment.NewLine) + detachError.Message, detachError);

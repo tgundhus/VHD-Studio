@@ -683,7 +683,9 @@ namespace VhdAttach {
                     var fileName = frm.FileName;
                     if (VsuxOperations.IsVsuxPath(fileName)) {
                         this.OpenFile(fileName);
-                        Medo.MessageBox.ShowInformation(this, "The new VSUX drive is locked and blank. Click Attach and enter its password, then use Disk Manager to initialize and format the new disk.\n\nPassword information stays inside the .vsux file; no JSON companion is required.");
+                        Medo.MessageBox.ShowInformation(this, frm.CreateSinglePartition
+                            ? "The new VSUX drive has one formatted NTFS partition and is locked. Click Attach and enter its password to use it as a drive.\n\nPassword information stays inside the .vsux file; no JSON companion is required."
+                            : "The new VSUX drive is locked and blank. Click Attach and enter its password, then use Disk Manager to initialize and format the new disk.\n\nPassword information stays inside the .vsux file; no JSON companion is required.");
                         return;
                     }
                     try {
@@ -692,7 +694,7 @@ namespace VhdAttach {
                         this.VhdFileName = newDocument.FileName;
                         Recent.Push(fileName);
                         UpdateRecent();
-                        using (var form = new AttachForm(new FileInfo(fileName), false, true)) {
+                        using (var form = new AttachForm(new FileInfo(fileName), false, false)) {
                             form.StartPosition = FormStartPosition.CenterParent;
                             form.ShowDialog(this);
                         }

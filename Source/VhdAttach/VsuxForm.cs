@@ -18,14 +18,16 @@ namespace VhdAttach {
         private readonly string Destination;
         private readonly long SizeInBytes;
         private readonly bool FixedSize;
+        private readonly bool CreateSinglePartition;
         private readonly Label StatusLabel;
         private bool IsBusy;
 
-        public VsuxForm(string operation, string path, bool readOnly = false, string destination = null, long sizeInBytes = 0, bool fixedSize = false) {
+        public VsuxForm(string operation, string path, bool readOnly = false, string destination = null, long sizeInBytes = 0, bool fixedSize = false, bool createSinglePartition = false) {
             if (!string.Equals(operation, "Attach", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(operation, "Lock", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(operation, "Protect", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(operation, "Create", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(operation, "CreateDisk", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(operation, "Portable", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(operation, "Convert", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(operation, "Backup", StringComparison.OrdinalIgnoreCase)) {
@@ -37,6 +39,7 @@ namespace VhdAttach {
             this.Destination = destination == null ? null : Path.GetFullPath(destination);
             this.SizeInBytes = sizeInBytes;
             this.FixedSize = fixedSize;
+            this.CreateSinglePartition = createSinglePartition;
             this.Font = SystemFonts.MessageBoxFont;
             this.Icon = Ui.AppIcon;
             this.Text = this.ActionTitle + " - " + Branding.ProductName;
@@ -52,7 +55,7 @@ namespace VhdAttach {
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.Controls.Add(new Label { Text = Path.GetFileName(this.FilePath), AutoSize = true, MaximumSize = new Size(this.ClientSize.Width - this.Font.Height * 3, 0), UseMnemonic = false });
-            this.StatusLabel = new Label { Text = "Waiting for the drive password…", AutoSize = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AccessibleRole = AccessibleRole.StatusBar };
+            this.StatusLabel = new Label { Text = this.Operation == "createdisk" ? "Preparing to create the virtual disk…" : "Waiting for the drive password…", AutoSize = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AccessibleRole = AccessibleRole.StatusBar };
             layout.Controls.Add(this.StatusLabel);
             layout.Controls.Add(new ProgressBar { Dock = DockStyle.Fill, Style = ProgressBarStyle.Marquee, Height = 8, AccessibleName = "Operation in progress" });
             this.Controls.Add(layout);
@@ -61,13 +64,13 @@ namespace VhdAttach {
         }
 
         private string ActionTitle => this.Operation switch {
-            "create" => "Create VSUX", "protect" => "Protect as VSUX", "lock" => "Detach & lock",
+            "create" => "Create VSUX", "createdisk" => "Create virtual disk", "protect" => "Protect as VSUX", "lock" => "Detach & lock",
             "portable" => "Make self-contained", "convert" => "Convert back to VHDX", "backup" => "Export recovery information",
             _ => this.ReadOnly ? "Attach read-only" : "Attach"
         };
 
-        public static DialogResult RunOperation(IWin32Window owner, string operation, string path, bool readOnly = false, string destination = null, long sizeInBytes = 0, bool fixedSize = false) {
-            using (var form = new VsuxForm(operation, path, readOnly, destination, sizeInBytes, fixedSize)) { return form.ShowDialog(owner); }
+        public static DialogResult RunOperation(IWin32Window owner, string operation, string path, bool readOnly = false, string destination = null, long sizeInBytes = 0, bool fixedSize = false, bool createSinglePartition = false) {
+            using (var form = new VsuxForm(operation, path, readOnly, destination, sizeInBytes, fixedSize, createSinglePartition)) { return form.ShowDialog(owner); }
         }
 
         private async Task ExecuteAsync() {
@@ -75,13 +78,14 @@ namespace VhdAttach {
             var result = DialogResult.Cancel;
             try {
                 if (!Ui.IsElevated) {
-                    this.StatusLabel.Text = "Waiting for administrator approval and the VSUX operation…";
+                    this.StatusLabel.Text = this.Operation == "createdisk" ? "Waiting for administrator approval and disk creation…" : "Waiting for administrator approval and the VSUX operation…";
                     var arguments = "/Vsux" + this.Operation + " " + Ui.Quote(this.FilePath);
                     if (this.Destination != null) { arguments += " " + Ui.Quote(this.Destination); }
                     if (this.ReadOnly) { arguments += " /readonly"; }
-                    if (this.Operation == "create") {
+                    if (this.Operation == "create" || this.Operation == "createdisk") {
                         arguments += " /size=" + this.SizeInBytes.ToString(CultureInfo.InvariantCulture);
                         if (this.FixedSize) { arguments += " /fixed"; }
+                        if (this.CreateSinglePartition) { arguments += " /singlepartition"; }
                     }
                     var startInfo = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, Branding.ApplicationExe), arguments) { UseShellExecute = true, Verb = "runas" };
                     using (var process = Process.Start(startInfo)) {
@@ -89,7 +93,7 @@ namespace VhdAttach {
                         await process.WaitForExitAsync();
                         result = process.ExitCode == 0 ? DialogResult.OK : process.ExitCode == 2 ? DialogResult.Cancel : DialogResult.Abort;
                     }
-                } else if (this.Operation == "backup") {
+                } else if (this.Operation == "backup" || this.Operation == "createdisk") {
                     await this.RunWorkerAsync(null);
                     result = DialogResult.OK;
                 } else {
@@ -124,7 +128,8 @@ namespace VhdAttach {
         private async Task RunWorkerAsync(string secret) {
             this.StatusLabel.Text = this.Operation switch {
                 "lock" => "Safely detaching, then locking… Close files on the drive if it is busy.",
-                "create" => "Creating the blank disk and applying its mount lock…",
+                "create" => this.CreateSinglePartition ? "Creating and formatting one NTFS partition, then locking the drive…" : "Creating the blank disk and applying its mount lock…",
+                "createdisk" => "Creating the disk and formatting one NTFS partition…",
                 "protect" => "Checking the detached image and storing its password information…",
                 "portable" => "Checking the password and storing its information inside the detached drive…",
                 "convert" => "Checking the password and converting the detached image back to VHDX…",
@@ -132,11 +137,12 @@ namespace VhdAttach {
                 _ => "Checking the password and attaching the drive…"
             };
             await Task.Run(() => {
-                var auditOperation = "VSUX " + this.ActionTitle;
+                var auditOperation = this.Operation == "createdisk" ? this.ActionTitle : "VSUX " + this.ActionTitle;
                 AuditLog.Started(auditOperation, this.FilePath, this.Destination);
                 try {
                     switch (this.Operation) {
-                        case "create": VsuxCreation.Create(this.FilePath, this.SizeInBytes, this.FixedSize, secret); break;
+                        case "create": VsuxCreation.Create(this.FilePath, this.SizeInBytes, this.FixedSize, secret, this.CreateSinglePartition); break;
+                        case "createdisk": NewDiskCreation.Create(this.FilePath, this.SizeInBytes, this.FixedSize, this.CreateSinglePartition); break;
                         case "protect": VsuxOperations.Protect(this.FilePath, this.Destination, secret); break;
                         case "lock": VsuxOperations.Lock(this.FilePath, secret); break;
                         case "portable": VsuxOperations.MakeSelfContained(this.FilePath, secret); break;

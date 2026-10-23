@@ -109,3 +109,10 @@ Read this when you want to know what changed in the documentation and when. Appe
   [the website](../site/index.html) and the 5.2.1 [changelog](../CHANGELOG.md): attached-volume
   Open controls, Disk Manager selection, and partition/format/letter steps when Explorer has no
   drive to show. Attach continues to leave initialization and formatting to confirmed actions.
+- Documented the default-checked **Create one NTFS partition** option for new VHD, VHDX and VSUX
+  in the [changelog](../CHANGELOG.md), [README](../README.md), [website](../site/index.html) and
+  [VSUX guide](VSUX.md): one prepared data volume by default, an unchecked blank/custom-layout
+  alternative, 64 MiB minimum, administrator approval, and creation-only formatting followed by
+  safe detach and VSUX locking. Existing-image Attach remains separate from layout changes.
+- Updated [SAFETY.md](SAFETY.md) for creation-only NTFS setup, exact backing-file checks,
+  RAW/empty/zero-probe guards, safe detach before VSUX protection, and the blank opt-out.

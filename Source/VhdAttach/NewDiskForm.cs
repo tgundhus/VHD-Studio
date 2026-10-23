@@ -22,6 +22,7 @@ namespace VhdAttach {
 
         private static readonly NumberDeclination BytesSuffix = new NumberDeclination("byte", "bytes", "bytes");
         public string FileName { get; private set; }
+        public bool CreateSinglePartition => this.chbCreatePartition.Checked;
 
         private void Form_Load(object sender, EventArgs e) {
             cmbSizeUnit.SelectedItem = Settings.LastSizeUnit;
@@ -53,6 +54,12 @@ namespace VhdAttach {
                     } else {
                         return;
                     }
+                }
+
+                var extension = isFormatVsux ? ".vsux" : isFormatVhdX ? ".vhdx" : ".vhd";
+                if (!Path.GetExtension(this.FileName).Equals(extension, StringComparison.OrdinalIgnoreCase)) {
+                    Medo.MessageBox.ShowWarning(this, "Use a " + extension + " filename for the selected disk format.");
+                    return;
                 }
 
                 DriveInfo drive = null;
@@ -101,9 +108,9 @@ namespace VhdAttach {
                     }
                 }
 
-                if (isFormatVsux) {
+                if (isFormatVsux || this.CreateSinglePartition) {
                     this.Cursor = Cursors.Default;
-                    if (VsuxForm.RunOperation(this, "Create", this.FileName, sizeInBytes: diskSize, fixedSize: isTypeFixed) == DialogResult.OK) {
+                    if (VsuxForm.RunOperation(this, isFormatVsux ? "Create" : "CreateDisk", this.FileName, sizeInBytes: diskSize, fixedSize: isTypeFixed, createSinglePartition: this.CreateSinglePartition) == DialogResult.OK) {
                         this.DialogResult = DialogResult.OK;
                     }
                     return;
@@ -150,9 +157,13 @@ namespace VhdAttach {
             var sizeInBytes = GetSizeInBytes();
             txtSizeInBytes.Text = string.Format(CultureInfo.CurrentCulture, "{0:#,##0}", sizeInBytes);
 
-            var sizeInBytesOk = (sizeInBytes >= (radFormatVsux.Checked ? 8L * 1024 * 1024 : 8 * 1000 * 1000 / 4096 * 4096));
+            var minimumSize = this.CreateSinglePartition ? 64L * 1024 * 1024
+                : radFormatVsux.Checked ? 8L * 1024 * 1024 : 8 * 1000 * 1000 / 4096 * 4096;
+            var sizeInBytesOk = sizeInBytes >= minimumSize;
             if (sizeInBytesOk == false) {
-                erpError.SetError(btnOK, Messages.DiskTooSmall);
+                erpError.SetError(btnOK, this.CreateSinglePartition
+                    ? "One NTFS partition requires at least 64 MiB. Increase the size or clear Create one NTFS partition to create a blank disk."
+                    : Messages.DiskTooSmall);
             } else {
                 erpError.SetError(btnOK, null);
             }

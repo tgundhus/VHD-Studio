@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using VhdAttach.Storage;
 using VhdAttachCommon;
 using VhdStudio.Vsux;
 
@@ -71,13 +72,15 @@ namespace VhdAttachTest {
         }
 
         [TestMethod]
-        public void Test_CreateVsux_ExistingTargetIsNeverChanged() {
+        [DataRow(false)]
+        [DataRow(true)]
+        public void Test_CreateVsux_ExistingTargetIsNeverChanged(bool createSinglePartition) {
             var target = Path.Combine(this.Folder, "existing.vsux");
             var existing = target;
             File.WriteAllBytes(existing, RandomNumberGenerator.GetBytes(4096));
             var originalHash = ScratchDisk.HashFile(existing);
 
-            Assert.ThrowsExactly<IOException>(() => VhdAttach.VsuxCreation.Create(target, DiskSize, false, Password));
+            Assert.ThrowsExactly<IOException>(() => VhdAttach.VsuxCreation.Create(target, DiskSize, false, Password, createSinglePartition));
 
             Assert.AreEqual(originalHash, ScratchDisk.HashFile(existing), "A name collision changed the existing file.");
             CollectionAssert.AreEquivalent(new[] { existing }, Directory.GetFiles(this.Folder), "A refused creation left an image or plaintext scratch file behind.");
@@ -128,6 +131,25 @@ namespace VhdAttachTest {
                         Assert.IsTrue(help.Visible, "Selecting VSUX must explain the password prompt and its unencrypted payload.");
                         StringAssert.Contains(help.Text, "unencrypted");
                         Assert.IsTrue(help.Parent.ClientRectangle.Contains(help.Bounds), "The VSUX explanation is clipped by the format group.");
+                        var partition = (CheckBox)typeof(VhdAttach.NewDiskForm).GetField("chbCreatePartition", PrivateInstance).GetValue(form);
+                        Assert.IsTrue(partition.Visible && partition.Enabled);
+                        Assert.IsTrue(partition.Checked && form.CreateSinglePartition, "New disks must default to one ready-to-use NTFS partition.");
+                        StringAssert.Contains(partition.Text, "NTFS");
+                        Assert.IsTrue(partition.Parent.ClientRectangle.Contains(partition.Bounds), "The partition option is clipped.");
+                        var size = (TextBox)typeof(VhdAttach.NewDiskForm).GetField("txtSize", PrivateInstance).GetValue(form);
+                        var units = (ComboBox)typeof(VhdAttach.NewDiskForm).GetField("cmbSizeUnit", PrivateInstance).GetValue(form);
+                        var create = (Button)typeof(VhdAttach.NewDiskForm).GetField("btnOK", PrivateInstance).GetValue(form);
+                        units.SelectedItem = "MB";
+                        size.Text = "32";
+                        Assert.IsFalse(create.Enabled, "NTFS creation must reject sizes below 64 MiB before opening a save dialog.");
+                        partition.Checked = false;
+                        Assert.IsFalse(form.CreateSinglePartition);
+                        Assert.IsTrue(create.Enabled, "Unchecking the option must preserve small blank-disk creation.");
+                        foreach (var name in new[] { "radFormatVhd", "radFormatVhdX", "radFormatVsux" }) {
+                            ((RadioButton)typeof(VhdAttach.NewDiskForm).GetField(name, PrivateInstance).GetValue(form)).Checked = true;
+                            Assert.IsTrue(partition.Visible && partition.Enabled, "The NTFS option must be available for every disk format.");
+                            Assert.IsFalse(form.CreateSinglePartition, "Changing format must not discard the blank-disk choice.");
+                        }
                     } finally {
                         form.Hide(); // Dispose without FormClosed: the test must not persist the user's last format or size.
                     }
@@ -166,7 +188,7 @@ namespace VhdAttachTest {
             var savedExitCode = Environment.ExitCode;
             try {
                 RunSta(() => {
-                    using (var form = new VhdAttach.VsuxForm("Create", target, sizeInBytes: DiskSize))
+                    using (var form = new VhdAttach.VsuxForm("Create", target, sizeInBytes: DiskSize, createSinglePartition: true))
                     using (var timer = new System.Windows.Forms.Timer { Interval = 25 }) {
                         form.StartPosition = FormStartPosition.Manual;
                         form.Location = new Point(-30000, -30000);
@@ -202,6 +224,148 @@ namespace VhdAttachTest {
                 });
             } finally { Environment.ExitCode = savedExitCode; }
             Assert.AreEqual(0, Directory.GetFiles(this.Folder).Length, "Cancelling the password prompt must leave neither a container, companion nor plaintext scratch image.");
+        }
+
+        [TestMethod]
+        [DataRow(false)]
+        [DataRow(true)]
+        [TestCategory("Elevated")]
+        [DoNotParallelize]
+        public void Test_CreateVsux_WithNtfsIsReadyOnFirstAttachAndRetainsContent(bool fixedSize) {
+            ScratchDisk.RequireElevation();
+            var container = Path.Combine(this.Folder, "ready.vsux");
+            VhdAttach.VsuxCreation.Create(container, DiskSize, fixedSize, Password, createSinglePartition: true);
+            CollectionAssert.AreEquivalent(new[] { container }, Directory.GetFiles(this.Folder));
+            var locked = VsuxOperations.GetInfo(container);
+            Assert.IsTrue(locked.IsLocked && !locked.IsAttached, "Prepared VSUX creation must still finish locked and detached.");
+            Assert.IsTrue(locked.HasEmbeddedPassword);
+            try {
+                VsuxOperations.Attach(container, Password);
+                var volume = WaitForReadyVolume(VsuxOperations.GetInfo(container).AttachedPath, container);
+                var content = RandomNumberGenerator.GetBytes(1024 * 1024);
+                var expected = Convert.ToHexString(SHA256.HashData(content));
+                using (var file = new FileStream(Path.Combine(volume.DriveLetter3, "first-attach.bin"), FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) {
+                    file.Write(content);
+                }
+                VsuxOperations.Lock(container, Password);
+                Assert.IsTrue(VsuxOperations.GetInfo(container).IsLocked);
+                VsuxOperations.Attach(container, Password, readOnly: true);
+                var restored = WaitForReadyVolume(VsuxOperations.GetInfo(container).AttachedPath, container);
+                using (var file = File.OpenRead(Path.Combine(restored.VolumeName, "first-attach.bin"))) {
+                    Assert.AreEqual(expected, Convert.ToHexString(SHA256.HashData(file)), "Safe detach and password reattach changed the newly written NTFS file.");
+                }
+            } finally { VsuxOperations.Lock(container, Password); }
+            Assert.IsTrue(VsuxOperations.GetInfo(container).IsLocked);
+        }
+
+        [TestMethod]
+        [DataRow(".vhd", false)]
+        [DataRow(".vhd", true)]
+        [DataRow(".vhdx", false)]
+        [DataRow(".vhdx", true)]
+        [TestCategory("Elevated")]
+        [DoNotParallelize]
+        public void Test_CreateNative_WithNtfsIsReadyOnFirstAttach(string extension, bool fixedSize) {
+            ScratchDisk.RequireElevation();
+            var image = Path.Combine(this.Folder, "ready" + extension);
+            VhdAttach.NewDiskCreation.Create(image, DiskSize, fixedSize, createSinglePartition: true);
+            Assert.IsNull(VirtualDiskImage.GetDetails(image).AttachedPath, "Prepared creation must leave the disk detached.");
+            var content = RandomNumberGenerator.GetBytes(1024 * 1024);
+            var expected = Convert.ToHexString(SHA256.HashData(content));
+            try {
+                var volume = WaitForReadyVolume(AttachNative(image, readOnly: false), image);
+                using (var file = new FileStream(Path.Combine(volume.DriveLetter3, "first-attach.bin"), FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) {
+                    file.Write(content);
+                }
+                DetachNative(image);
+                var restored = WaitForReadyVolume(AttachNative(image, readOnly: true), image);
+                using (var file = File.OpenRead(Path.Combine(restored.VolumeName, "first-attach.bin"))) {
+                    Assert.AreEqual(expected, Convert.ToHexString(SHA256.HashData(file)));
+                }
+            } finally { DetachNative(image); }
+        }
+
+        [TestMethod]
+        [DataRow(".vhd")]
+        [DataRow(".vhdx")]
+        [TestCategory("Elevated")]
+        [DoNotParallelize]
+        public void Test_CreateNative_WithoutNtfsKeepsSmallDiskBlank(string extension) {
+            ScratchDisk.RequireElevation();
+            var image = Path.Combine(this.Folder, "blank" + extension);
+            VhdAttach.NewDiskCreation.Create(image, 8L * 1024 * 1024, false, createSinglePartition: false);
+            try {
+                var path = AttachNative(image, readOnly: true);
+                var disk = WaitForStorageDisk(path, image);
+                Assert.AreEqual(0, StorageManager.GetPartitions(disk.Number).Count, "Unchecking NTFS creation must leave the disk unpartitioned.");
+                Assert.AreEqual(0, Volume.GetVolumesOnPhysicalDrive(path).Count);
+            } finally { DetachNative(image); }
+        }
+
+        [TestMethod]
+        [DataRow(".vhd")]
+        [DataRow(".vhdx")]
+        [DataRow(".vsux")]
+        public void Test_CreateWithNtfs_TooSmallCreatesNothing(string extension) {
+            var target = Path.Combine(this.Folder, "too-small" + extension);
+            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => {
+                if (extension == ".vsux") { VhdAttach.VsuxCreation.Create(target, DiskSize - 4096, false, Password, createSinglePartition: true); }
+                else { VhdAttach.NewDiskCreation.Create(target, DiskSize - 4096, false, createSinglePartition: true); }
+            });
+            Assert.AreEqual(0, Directory.GetFiles(this.Folder).Length, "The minimum NTFS size must be checked before creating an image or scratch file.");
+        }
+
+        [TestMethod]
+        [DataRow(".vhd", false)]
+        [DataRow(".vhd", true)]
+        [DataRow(".vhdx", false)]
+        [DataRow(".vhdx", true)]
+        public void Test_CreateNative_CollisionNeverChangesExistingFile(string extension, bool createSinglePartition) {
+            var target = Path.Combine(this.Folder, "existing" + extension);
+            File.WriteAllBytes(target, RandomNumberGenerator.GetBytes(4096));
+            var originalHash = ScratchDisk.HashFile(target);
+            Assert.ThrowsExactly<IOException>(() => VhdAttach.NewDiskCreation.Create(target, DiskSize, false, createSinglePartition));
+            Assert.AreEqual(originalHash, ScratchDisk.HashFile(target));
+            CollectionAssert.AreEquivalent(new[] { target }, Directory.GetFiles(this.Folder));
+        }
+
+        private static string AttachNative(string image, bool readOnly) {
+            using (var disk = new Medo.IO.VirtualDisk(image)) {
+                disk.Open(readOnly ? Medo.IO.VirtualDiskAccessMask.AttachReadOnly | Medo.IO.VirtualDiskAccessMask.GetInfo | Medo.IO.VirtualDiskAccessMask.Detach : Medo.IO.VirtualDiskAccessMask.All);
+                disk.Attach(Medo.IO.VirtualDiskAttachOptions.PermanentLifetime | (readOnly ? Medo.IO.VirtualDiskAttachOptions.ReadOnly : Medo.IO.VirtualDiskAttachOptions.None));
+                return disk.GetAttachedPath();
+            }
+        }
+
+        private static void DetachNative(string image) {
+            if (VirtualDiskImage.GetDetails(image).AttachedPath != null) {
+                VhdAttachService.AttachHelper.Detach(image, false, VhdAttachService.PipeCaller.ForService());
+            }
+        }
+
+        private static Volume WaitForReadyVolume(string attachedPath, string image) {
+            var disk = WaitForStorageDisk(attachedPath, image);
+            for (var attempt = 0; attempt < 60; attempt++) {
+                var volume = Volume.GetVolumesOnPhysicalDrive(attachedPath).FirstOrDefault(candidate => candidate.DriveLetter3 != null && Directory.Exists(candidate.DriveLetter3));
+                if (volume != null) {
+                    var partitions = StorageManager.GetPartitions(disk.Number);
+                    Assert.AreEqual(1, partitions.Count(partition => partition.FileSystem == "NTFS"), "Creation must prepare exactly one NTFS data volume.");
+                    Assert.AreEqual(1, partitions.Count(partition => partition.Type != "Reserved (MSR)"), "Creation made more than one user partition.");
+                    return volume;
+                }
+                Thread.Sleep(250);
+            }
+            throw new AssertFailedException("The newly prepared disk did not expose an NTFS drive letter on first attach.");
+        }
+
+        private static DiskInfo WaitForStorageDisk(string attachedPath, string image) {
+            var number = int.Parse(attachedPath.Substring(17), System.Globalization.CultureInfo.InvariantCulture);
+            for (var attempt = 0; attempt < 40; attempt++) {
+                var disk = StorageManager.GetDisks().SingleOrDefault(candidate => candidate.Number == number);
+                if (disk != null && disk.IsVirtual && string.Equals(PathGuard.GetLongPath(disk.Location ?? ""), image, StringComparison.OrdinalIgnoreCase)) { return disk; }
+                Thread.Sleep(250);
+            }
+            throw new AssertFailedException("The storage view does not identify the exact disposable image.");
         }
 
         private void AssertProtectionPage(string file, bool enabled) {

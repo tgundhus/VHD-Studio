@@ -28,6 +28,7 @@ namespace VhdAttach {
             this.btnOK = new System.Windows.Forms.Button();
             this.btnCancel = new System.Windows.Forms.Button();
             this.chbThousandSize = new System.Windows.Forms.CheckBox();
+            this.chbCreatePartition = new System.Windows.Forms.CheckBox();
             this.grpType = new System.Windows.Forms.GroupBox();
             this.radTypeFixed = new System.Windows.Forms.RadioButton();
             this.radTypeDynamic = new System.Windows.Forms.RadioButton();
@@ -58,11 +59,11 @@ namespace VhdAttach {
             // btnOK
             // 
             this.btnOK.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnOK.Location = new System.Drawing.Point(68, 350);
+            this.btnOK.Location = new System.Drawing.Point(68, 386);
             this.btnOK.Margin = new System.Windows.Forms.Padding(3, 15, 3, 3);
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new System.Drawing.Size(100, 28);
-            this.btnOK.TabIndex = 8;
+            this.btnOK.TabIndex = 9;
             this.btnOK.Text = "Create";
             this.btnOK.UseVisualStyleBackColor = true;
             this.btnOK.Click += new System.EventHandler(this.btnOK_Click);
@@ -71,11 +72,11 @@ namespace VhdAttach {
             // 
             this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnCancel.Location = new System.Drawing.Point(174, 350);
+            this.btnCancel.Location = new System.Drawing.Point(174, 386);
             this.btnCancel.Margin = new System.Windows.Forms.Padding(3, 15, 3, 3);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(100, 28);
-            this.btnCancel.TabIndex = 9;
+            this.btnCancel.TabIndex = 10;
             this.btnCancel.Text = "Cancel";
             this.btnCancel.UseVisualStyleBackColor = true;
             // 
@@ -89,6 +90,20 @@ namespace VhdAttach {
             this.chbThousandSize.Text = "1000-based";
             this.chbThousandSize.UseVisualStyleBackColor = true;
             this.chbThousandSize.CheckedChanged += new System.EventHandler(this.control_Changed);
+            //
+            // chbCreatePartition
+            //
+            this.chbCreatePartition.AutoSize = true;
+            this.chbCreatePartition.Checked = true;
+            this.chbCreatePartition.CheckState = System.Windows.Forms.CheckState.Checked;
+            this.chbCreatePartition.Location = new System.Drawing.Point(12, 346);
+            this.chbCreatePartition.Name = "chbCreatePartition";
+            this.chbCreatePartition.TabIndex = 8;
+            this.chbCreatePartition.Text = "&Create one NTFS partition";
+            this.chbCreatePartition.AccessibleName = "Create one NTFS partition";
+            this.chbCreatePartition.AccessibleDescription = "Initialize the new disk and quick-format one NTFS partition using its available space. Leave unchecked to create a blank disk.";
+            this.chbCreatePartition.UseVisualStyleBackColor = true;
+            this.chbCreatePartition.CheckedChanged += new System.EventHandler(this.control_Changed);
             // 
             // grpType
             // 
@@ -244,7 +259,8 @@ namespace VhdAttach {
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.btnCancel;
-            this.ClientSize = new System.Drawing.Size(286, 390);
+            this.ClientSize = new System.Drawing.Size(286, 426);
+            this.Controls.Add(this.chbCreatePartition);
             this.Controls.Add(this.grpFormat);
             this.Controls.Add(this.txtSize);
             this.Controls.Add(this.cmbSizeUnit);
@@ -282,6 +298,7 @@ namespace VhdAttach {
         private System.Windows.Forms.Button btnOK;
         private System.Windows.Forms.Button btnCancel;
         private System.Windows.Forms.CheckBox chbThousandSize;
+        private System.Windows.Forms.CheckBox chbCreatePartition;
         private System.Windows.Forms.GroupBox grpType;
         private System.Windows.Forms.RadioButton radTypeFixed;
         private System.Windows.Forms.RadioButton radTypeDynamic;

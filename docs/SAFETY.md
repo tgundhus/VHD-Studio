@@ -78,10 +78,14 @@ as a backup. Normal Attach never silently migrates an image. New single-file ima
 between PCs without JSON. The optional **Export recovery information…** JSON contains
 diagnostics, not password-verifier information, and is not required for normal use or recovery.
 
-**New → VSUX (soft protected drive)** creates a blank image, then applies the existing mount lock.
-It starts locked and detached; creation never automatically attaches, initializes or formats it.
-The user must attach with the password before initializing and formatting the new blank disk in
-Disk Manager. Existing image destinations, including directories with those names, are refused;
+**New → Create one NTFS partition** is checked by default for VHD, VHDX and VSUX. Only the newly
+created file is attached for setup: its exact backing-file identity and virtual-disk location are
+checked, and the disk must be RAW, without partitions and with an all-zero first MiB. It is
+initialized as GPT and one NTFS data partition is created, then safely detached. A VSUX image
+is protected only after successful detach and finishes locked. Clearing the checkbox skips
+initialization and formatting, leaving a blank disk for manual setup. The prepared option needs
+at least 64 MiB and administrator approval. Ordinary Attach never invokes this creation step.
+Existing image destinations, including directories with those names, are refused;
 an unrelated adjacent JSON file is ignored and left unchanged. If creation fails after files have
 been created, the error identifies the possible temporary VHDX and container paths. They are
 retained for inspection and recovery; the user must not assume the partial result is locked.

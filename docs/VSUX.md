@@ -8,14 +8,19 @@ BitLocker-equivalent protection.
 ## Create a VSUX image
 
 1. Click **New** and select **VSUX (soft protected drive)**, the size and dynamic or fixed type.
-2. Click **Create** and choose a new `.vsux` filename on a local physical drive.
+2. Leave **Create one NTFS partition** checked for a ready-to-use data volume, or clear it for
+   a blank disk and a custom partition layout. The checked option needs at least 64 MiB.
+   Click **Create** and choose a new `.vsux` filename on a local physical drive.
 3. Approve elevation if requested, then enter and confirm the password.
 
-Creation produces one blank, locked, detached image. The password salt, verifier and derivation
+Creation produces one locked, detached image. The password salt, verifier and derivation
 parameters are stored inside the VHDX container; no `.vsux.json` companion is created or needed.
-Creation does not automatically attach or initialize the disk. Click **Attach**, enter the password, then use
-**Disk Manager** to initialize the new blank disk and create and format a partition before
-storing files. When finished, use **Detach & lock**.
+With the default checkbox selected, creation initializes the new disk as GPT and formats one
+NTFS data partition before applying its mount lock. Click **Attach** and enter the password to
+use the drive. With the checkbox cleared, creation leaves the disk blank: after attaching, use
+**Disk Manager** to initialize it and create and format a partition before storing files.
+When finished, use **Detach & lock**. Creation never replaces an existing file, and Attach never
+initializes or formats an existing image automatically.
 
 If Attach succeeds but no drive appears in Explorer, open **Drive → Disk Manager…**
 or **Disk Manager**. VHD Studio selects the attached VSUX disk. Verify its backing filename,

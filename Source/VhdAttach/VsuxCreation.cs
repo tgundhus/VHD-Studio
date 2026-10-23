@@ -1,24 +1,23 @@
 using System;
 using System.IO;
-using System.Threading;
 using VhdAttachCommon;
 using VhdStudio.Vsux;
 
 namespace VhdAttach {
-    /// <summary>Creates a blank VHDX, then applies the existing eight-byte VSUX mount lock.</summary>
+    /// <summary>Creates a new VHDX, optionally prepares an NTFS volume, then applies the VSUX mount lock.</summary>
     internal static class VsuxCreation {
-        internal static void Create(string containerPath, long size, bool fixedSize, string password) {
+        internal static void Create(string containerPath, long size, bool fixedSize, string password, bool createSinglePartition = false) {
             // Validate the secret before creating even the temporary image or its companion.
             if (password == null || password.Length < 8 || password.Length > 1024) {
                 throw new ArgumentException("Use a password between 8 and 1024 characters.", nameof(password));
             }
-            var target = Validate(containerPath, size);
+            var target = Validate(containerPath, size, createSinglePartition);
             var folder = Path.GetDirectoryName(target);
             // Keep the destination directory pinned while creating and renaming the new image.
             using (PathGuard.Open(folder, directory: true, rejectHardLinks: false)) {
                 var temporary = Path.Combine(folder, ".vsux-new-" + Guid.NewGuid().ToString("N") + ".vhdx");
                 try {
-                    VirtualDiskImage.Create(temporary, size, fixedSize, null, CancellationToken.None);
+                    NewDiskCreation.Create(temporary, size, fixedSize, createSinglePartition);
                     VsuxOperations.Protect(temporary, target, password);
                     var result = VsuxOperations.GetInfo(target);
                     if (!result.IsLocked || result.IsAttached) {
@@ -35,10 +34,8 @@ namespace VhdAttach {
         }
 
         /// <summary>Checks a new destination without creating or changing files.</summary>
-        internal static string Validate(string containerPath, long size) {
-            if (size < 8L * 1024 * 1024 || size % 4096 != 0) {
-                throw new ArgumentOutOfRangeException(nameof(size), "Use a disk size of at least 8 MiB, aligned to 4096 bytes.");
-            }
+        internal static string Validate(string containerPath, long size, bool createSinglePartition = false) {
+            NewDiskCreation.ValidateSize(size, createSinglePartition);
             if (string.IsNullOrWhiteSpace(containerPath) || !Path.IsPathFullyQualified(containerPath)) {
                 throw new ArgumentException("Choose a full local path for the new .vsux file.", nameof(containerPath));
             }

@@ -2,6 +2,12 @@
 
 ## 5.2.1
 
+### New
+- **New → Create one NTFS partition** is enabled by default for VHD, VHDX and VSUX. It prepares
+  one data volume on the newly created disk. Clear the checkbox for a blank disk and a custom
+  layout. Prepared VSUX images are safely detached and locked; Attach then makes the volume
+  available as a drive. This option requires a disk of at least 64 MiB and administrator approval.
+
 ### Fixed
 - Attached VSUX images now expose their volumes and **Drive** controls. **Open in Explorer**
   is available for volumes with a drive letter; setup and letter changes open **Disk Manager**

@@ -122,7 +122,7 @@ namespace VhdAttach {
 
         private static bool TryRunVsuxOperation() {
             string operation = null;
-            foreach (var name in new[] { "Attach", "Lock", "Protect", "Create", "Portable", "Convert", "Backup" }) {
+            foreach (var name in new[] { "Attach", "Lock", "Protect", "Create", "CreateDisk", "Portable", "Convert", "Backup" }) {
                 if (!Medo.Application.Args.Current.ContainsKey("Vsux" + name)) { continue; }
                 if (operation != null) {
                     Medo.MessageBox.ShowError(null, "Specify only one VSUX operation.");
@@ -140,15 +140,15 @@ namespace VhdAttach {
                 return true;
             }
             long sizeInBytes = 0;
-            if (operation == "Create" && (!long.TryParse(Medo.Application.Args.Current.GetValue("size", ""), NumberStyles.None, CultureInfo.InvariantCulture, out sizeInBytes)
+            if ((operation == "Create" || operation == "CreateDisk") && (!long.TryParse(Medo.Application.Args.Current.GetValue("size", ""), NumberStyles.None, CultureInfo.InvariantCulture, out sizeInBytes)
                 || sizeInBytes < 8L * 1024 * 1024 || sizeInBytes % 4096 != 0)) {
-                Medo.MessageBox.ShowError(null, "Specify a VSUX size in bytes, at least 8 MiB and aligned to 4096 bytes.");
+                Medo.MessageBox.ShowError(null, "Specify a disk size in bytes, at least 8 MiB and aligned to 4096 bytes.");
                 Environment.ExitCode = 1;
                 return true;
             }
             var result = VsuxForm.RunOperation(null, operation, files[0].TrimEnd('\"'),
                 Medo.Application.Args.Current.ContainsKey("readonly"), hasDestination ? files[1].TrimEnd('\"') : null,
-                sizeInBytes, Medo.Application.Args.Current.ContainsKey("fixed"));
+                sizeInBytes, Medo.Application.Args.Current.ContainsKey("fixed"), Medo.Application.Args.Current.ContainsKey("singlepartition"));
             Environment.ExitCode = result == DialogResult.OK ? 0 : result == DialogResult.Cancel ? 2 : 1;
             return true;
         }

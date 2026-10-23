@@ -1,5 +1,24 @@
 # Changelog
 
+## 5.0.3
+
+### Improved
+- A disk gets its last drive letter back. Windows forgets a disk's letter as soon as another drive (for
+  example a USB stick) takes it, so the disk came back on a different letter. VHD Studio now remembers
+  the letter of each volume per disk and restores it on every attach, also auto-mount at startup. If
+  another drive has that letter at the moment, the disk gets a free letter this time and its usual one
+  again next time. Changing the letter in **Drive → Change drive letter** makes the new one the usual one.
+
+### Fixed
+- An attached disk could get a drive letter you already use for a mapped network drive or a `subst`
+  drive. The service attaches disks for all users, so it couldn't see drives that exist only in your
+  sign-in session, and that letter kept showing the other drive. VHD Studio now tells the service which
+  letters you use (including remembered network drives that aren't connected yet), and the disk moves to
+  a free letter for good. You're told once.
+- **Drive → Change drive letter** no longer offers letters of remembered network drives.
+- Changing to a letter that is already in use removed the disk's current letter and left it without one.
+  The change is now refused up front, and the old letter is put back if Windows rejects the new one.
+
 ## 5.0.2
 
 ### Fixed

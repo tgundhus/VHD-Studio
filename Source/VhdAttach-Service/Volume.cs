@@ -51,14 +51,30 @@ namespace VhdAttachCommon {
             }
         }
 
+        /// <exception cref="InvalidOperationException">The new letter is already in use; the current letter is kept.</exception>
         public void ChangeLetter(string newLetter) {
-            newLetter = ParseDriveLetter(newLetter);
-            if (newLetter == this.DriveLetter3) { return; } //nothing to do
+            var letter = ParseDriveLetter(newLetter);
+            if (letter == null) { throw new ArgumentOutOfRangeException(nameof(newLetter), "Drive letter expected."); }
+            var oldLetter = this.DriveLetter3;
+            if (letter == oldLetter) { return; } //nothing to do
+            if (IsLetterInUse(letter[0])) {
+                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, "Drive letter {0} is already in use.", letter.Substring(0, 2)));
+            }
 
             this.RemoveLetter();
-            if (NativeMethods.SetVolumeMountPoint(newLetter, this.VolumeName) == false) {
-                throw new Win32Exception();
+            if (NativeMethods.SetVolumeMountPoint(letter, this.VolumeName) == false) {
+                var error = new Win32Exception();
+                if (oldLetter != null) { NativeMethods.SetVolumeMountPoint(oldLetter, this.VolumeName); } //keep the volume reachable
+                throw error;
             }
+        }
+
+        /// <summary>
+        /// True if the drive letter exists in this process's view: global drives plus this logon session's own
+        /// (mapped network and subst drives). The service sees only global drives.
+        /// </summary>
+        public static bool IsLetterInUse(char letter) {
+            return NativeMethods.QueryDosDevice(letter + ":", new StringBuilder(1024), 1024) > 0;
         }
 
         public void RemoveLetter() {

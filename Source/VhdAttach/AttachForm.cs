@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
@@ -14,6 +15,7 @@ namespace VhdAttach {
         private readonly bool InitializeDisk;
         private List<Exception> _exceptions;
         private DialogResult VsuxResult = DialogResult.OK;
+        private List<string> _notices;
 
         private AttachForm() {
             InitializeComponent();
@@ -46,6 +48,8 @@ namespace VhdAttach {
 
         private void bw_DoWork(object sender, DoWorkEventArgs e) {
             this._exceptions = new List<Exception>();
+            this._notices = new List<string>();
+            var avoidLetters = GetSessionLetters();
             FileInfo iFile = null;
             try {
                 for (var i = 0; i < this.Files.Count; ++i) {
@@ -59,9 +63,11 @@ namespace VhdAttach {
                     }
 
                     Utility.FixServiceErrorsIfNeeded();
-                    var res = PipeClient.Attach(iFile.FullName, this.MountReadOnly, this.InitializeDisk);
+                    var res = PipeClient.Attach(iFile.FullName, this.MountReadOnly, this.InitializeDisk, avoidLetters: avoidLetters);
                     if (res.IsError) {
                         this._exceptions.Add(new InvalidOperationException(iFile.Name, new Exception(res.Message)));
+                    } else {
+                        this._notices.AddRange(DriveLetters.FormatNotices(res.DriveLetters));
                     }
                 }
             } catch (IOException) {
@@ -70,6 +76,19 @@ namespace VhdAttach {
                 this._exceptions.Add(new InvalidOperationException(iFile.Name, ex));
             }
             if (this._exceptions.Count > 0) { throw new InvalidOperationException(); }
+        }
+
+        /// <summary>
+        /// Letters this user uses for network or subst drives; the service keeps attached disks off them.
+        /// Never fails the attach.
+        /// </summary>
+        private static string GetSessionLetters() {
+            try {
+                return DriveLetters.GetSessionLetters();
+            } catch (Exception ex) {
+                Debug.WriteLine("VhdAttach: Drive letter check failed: " + ex.Message);
+                return "";
+            }
         }
 
         private void bw_ProgressChanged(object sender, ProgressChangedEventArgs e) {
@@ -94,6 +113,9 @@ namespace VhdAttach {
             } else {
                 System.Environment.ExitCode = this.VsuxResult == DialogResult.Cancel ? 2 : 1;
                 this.DialogResult = this.VsuxResult;
+            }
+            if ((this._notices != null) && (this._notices.Count > 0)) {
+                Medo.MessageBox.ShowInformation(this, string.Join("\n\n", this._notices));
             }
             this.Close();
         }

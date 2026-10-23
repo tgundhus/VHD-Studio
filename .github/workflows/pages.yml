@@ -1,0 +1,56 @@
+name: Website
+
+# Publishes site/ to https://tgundhus.github.io/VHD-Studio/.
+# Requires Settings > Pages > Build and deployment > Source = "GitHub Actions".
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'site/**'
+      - 'docs/images/**'
+      - 'Source/Directory.Build.props'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble site (version from Directory.Build.props, images from docs/images)
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Source/Directory.Build.props | head -n 1)
+          test -n "$version"
+          lastmod=$(git log -1 --format=%cs)
+          mkdir -p _site/images
+          cp -r site/. _site/
+          cp docs/images/*.png _site/images/
+          sed -i "s/__VERSION__/$version/g; s/__LASTMOD__/$lastmod/g" _site/index.html _site/sitemap.xml
+          if grep -rl -e '__VERSION__' -e '__LASTMOD__' _site; then echo "Unreplaced placeholder"; exit 1; fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -9,6 +9,12 @@
 </p>
 
 <p align="center">
+  <a href="https://tgundhus.github.io/VHD-Studio/">Website</a> ·
+  <a href="https://github.com/tgundhus/VHD-Studio/releases/latest">Download</a> ·
+  <a href="docs/SAFETY.md">Data safety</a>
+</p>
+
+<p align="center">
   <img src="docs/images/main-window.png" alt="VHD Studio main window" width="720">
 </p>
 

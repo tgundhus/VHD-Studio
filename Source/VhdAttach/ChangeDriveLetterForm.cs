@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.IO;
 using System.Windows.Forms;
 using VhdAttachCommon;
 
@@ -21,20 +19,12 @@ namespace VhdAttach {
                 cmbDriveLetter.Items.Add("");
             }
 
-            var drives = new List<string>();
+            var used = DriveLetters.GetUsedLetters(); //includes this user's network and subst drives, also remembered ones
             for (char letter = 'A'; letter <= 'Z'; letter++) {
-                drives.Add(letter.ToString() + ":");
-            }
-
-            foreach (var drive in DriveInfo.GetDrives()) {
-                var driveName = drive.Name.Substring(0, 2);
-                if (driveName.Equals(currDrive, StringComparison.OrdinalIgnoreCase) == false) {
-                    drives.Remove(driveName);
+                var drive = letter.ToString() + ":";
+                if (!used.Contains(letter) || drive.Equals(currDrive, StringComparison.OrdinalIgnoreCase)) {
+                    cmbDriveLetter.Items.Add(drive);
                 }
-            }
-
-            foreach (var drive in drives) {
-                cmbDriveLetter.Items.Add(drive);
             }
             if (currDrive != null) { cmbDriveLetter.SelectedItem = currDrive; }
         }

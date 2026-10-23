@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VHD Studio – Free VHD &amp; VHDX Manager for Windows, No Hyper-V</title>
+<meta name="description" content="Attach, auto-mount, compact, resize, convert and repair VHD, VHDX and ISO files on any Windows 10 or 11 edition, including Home. Free, open source, no Hyper-V.">
+<link rel="canonical" href="https://tgundhus.github.io/VHD-Studio/">
+<link rel="icon" type="image/png" href="images/logo.png">
+<meta name="theme-color" content="#0b1d4f">
+<!-- Google Search Console: paste the <meta name="google-site-verification" content="..."> tag on the next line. -->
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="VHD Studio">
+<meta property="og:title" content="VHD Studio – Free VHD &amp; VHDX Manager for Windows">
+<meta property="og:description" content="Attach, auto-mount, compact, resize, convert and repair virtual disks on any Windows edition. No Hyper-V, no scripts. Free and open source.">
+<meta property="og:url" content="https://tgundhus.github.io/VHD-Studio/">
+<meta property="og:image" content="https://tgundhus.github.io/VHD-Studio/images/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta name="twitter:card" content="summary_large_image">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "VHD Studio",
+  "description": "Free, open-source Windows utility to attach, auto-mount, compact, resize, convert and repair VHD, VHDX and ISO virtual disks without Hyper-V. Includes a DiskPart-style Disk Manager. Successor to VHD Attach.",
+  "url": "https://tgundhus.github.io/VHD-Studio/",
+  "downloadUrl": "https://github.com/tgundhus/VHD-Studio/releases/latest",
+  "softwareVersion": "__VERSION__",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Windows 10 (1809 or later), Windows 11",
+  "processorRequirements": "x64",
+  "image": "https://tgundhus.github.io/VHD-Studio/images/social-preview.png",
+  "screenshot": [
+    "https://tgundhus.github.io/VHD-Studio/images/main-window.png",
+    "https://tgundhus.github.io/VHD-Studio/images/maintenance.png",
+    "https://tgundhus.github.io/VHD-Studio/images/disk-manager.png"
+  ],
+  "license": "https://opensource.org/licenses/MIT",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Tobias Gundhus", "url": "https://github.com/tgundhus" },
+  "publisher": { "@type": "Organization", "name": "xGND Software" },
+  "sameAs": ["https://github.com/tgundhus/VHD-Studio"]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Does VHD Studio need Hyper-V?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. VHD Studio uses VirtDisk.dll and the Storage Management API, which are part of every Windows 10 and 11 edition, including Home. The Hyper-V PowerShell module is not needed." }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I compact a WSL or Docker ext4.vhdx file?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Run fstrim inside the Linux distribution so freed space is zeroed, then open the ext4.vhdx in VHD Studio and choose Maintenance, Compact, Zeroed blocks only. VHD Studio can run wsl --shutdown first to release the file, and shows the size before and after." }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I auto-mount a VHD or VHDX at startup?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Open the disk in VHD Studio and turn on auto-mount from the toolbar. The VHD Studio service re-attaches it at every boot, optionally read-only, without a drive letter, or mounted into an empty folder. This also works for Dev Drive VHDX files, which Windows does not re-attach on its own." }
+    },
+    {
+      "@type": "Question",
+      "name": "Why does my VHDX give \"Access denied\" after a crash?",
+      "acceptedAnswer": { "@type": "Answer", "text": "A VHDX that was not closed cleanly, for example after a crash or power loss, has a log that has not been replayed, and Windows refuses to attach it. VHD Studio detects the pending log and replays it so the disk attaches normally. A read-only attach never writes to the file; it points you to Repair, Replay log, which makes a backup first." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is VHD Studio the same as VHD Attach?",
+      "acceptedAnswer": { "@type": "Answer", "text": "VHD Studio is the successor to VHD Attach by Josip Medved, who maintained versions 1.0 to 4.22 from 2009 to 2020. VHD Studio 5 keeps his attach engine and auto-mount service and adds maintenance tools, a Disk Manager and data-safety hardening. Setup removes VHD Attach 4.x automatically and keeps your auto-mount list." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is VHD Studio free?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. VHD Studio is free and open source under the MIT license. The source code is on GitHub." }
+    }
+  ]
+}
+</script>
+
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-alt: #f3f6fb;
+  --surface: #ffffff;
+  --text: #0f172a;
+  --muted: #4a5568;
+  --border: #dbe2ee;
+  --link: #1747c8;
+  --accent: #1747c8;
+  --accent-text: #ffffff;
+  --ok: #138a63;
+  --code-bg: #e9eef7;
+  --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 8px 24px rgba(15, 23, 42, .08);
+  --hero-from: #08163d;
+  --hero-to: #1747c8;
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: "Cascadia Mono", Consolas, ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1220;
+    --bg-alt: #0f1829;
+    --surface: #131d31;
+    --text: #e6ebf5;
+    --muted: #a6b1c6;
+    --border: #25314a;
+    --link: #93b2ff;
+    --accent: #3d6df2;
+    --ok: #3cc796;
+    --code-bg: #1b2740;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .35);
+    --hero-from: #050d24;
+    --hero-to: #1440b0;
+    color-scheme: dark;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 17px/1.6 var(--font);
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--link); text-underline-offset: 2px; }
+code { font-family: var(--mono); font-size: .88em; background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+h1, h2, h3 { line-height: 1.2; margin: 0; }
+h2 { font-size: clamp(1.6rem, 3.2vw, 2.1rem); letter-spacing: -.01em; }
+h3 { font-size: 1.15rem; }
+p { margin: 0; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 16px; top: 16px; z-index: 10; background: var(--surface); padding: 8px 12px; border-radius: 6px; }
+
+/* Header */
+.top { background: var(--hero-from); color: #fff; }
+.top .wrap { display: flex; align-items: center; gap: 16px; min-height: 60px; }
+.brand { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; font-weight: 600; font-size: 1.05rem; }
+.brand img { width: 30px; height: 30px; }
+.top nav { margin-left: auto; display: flex; gap: 22px; font-size: .95rem; }
+.top nav a { color: rgba(255, 255, 255, .85); text-decoration: none; }
+.top nav a:hover { color: #fff; text-decoration: underline; }
+@media (max-width: 640px) { .top nav a:not(.gh) { display: none; } }
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, var(--hero-from) 0%, #0f2e86 55%, var(--hero-to) 100%);
+  color: #fff;
+  padding: 56px 0 72px;
+  overflow: hidden;
+}
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 48px; align-items: center; }
+.hero h1 { font-size: clamp(2rem, 4.6vw, 3.1rem); letter-spacing: -.02em; }
+.hero .lede { margin-top: 18px; font-size: 1.15rem; color: rgba(255, 255, 255, .88); max-width: 34em; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 20px; border-radius: 8px; font-weight: 600; text-decoration: none; font-size: 1rem;
+}
+.btn-primary { background: #fff; color: #0d2a7a; }
+.btn-primary:hover { background: #e8eeff; }
+.btn-ghost { color: #fff; border: 1px solid rgba(255, 255, 255, .45); }
+.btn-ghost:hover { background: rgba(255, 255, 255, .1); }
+.meta { margin-top: 16px; font-size: .9rem; color: rgba(255, 255, 255, .72); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; padding: 0; list-style: none; }
+.chips li { font-size: .88rem; padding: 5px 12px; border-radius: 999px; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .22); }
+.shot {
+  border-radius: 10px; overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .25), 0 24px 60px rgba(0, 0, 0, .35);
+  border: 1px solid rgba(255, 255, 255, .25);
+  background: #fff;
+}
+@media (max-width: 880px) {
+  .hero { padding: 40px 0 48px; }
+  .hero .wrap { grid-template-columns: 1fr; gap: 36px; }
+}
+
+/* Sections */
+section { padding: 72px 0; }
+section.alt { background: var(--bg-alt); }
+.section-head { max-width: 46em; margin-bottom: 36px; }
+.section-head p { margin-top: 12px; color: var(--muted); font-size: 1.05rem; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px; box-shadow: var(--shadow);
+}
+.card h3 { display: flex; gap: 10px; align-items: baseline; }
+.card h3 .n { color: var(--accent); font-family: var(--mono); font-size: .85rem; }
+.card p { margin-top: 10px; color: var(--muted); }
+@media (max-width: 360px) { .grid { grid-template-columns: 1fr; } }
+
+.figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 28px; }
+figure { margin: 0; }
+figure .shot { border-color: var(--border); }
+figcaption { margin-top: 12px; color: var(--muted); font-size: .95rem; }
+figcaption b { color: var(--text); }
+@media (max-width: 380px) { .figs { grid-template-columns: 1fr; } }
+
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: start; }
+@media (max-width: 880px) { .split { grid-template-columns: 1fr; gap: 28px; } }
+.checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.checks li { padding-left: 30px; position: relative; }
+.checks li::before {
+  content: ""; position: absolute; left: 0; top: .3em; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--ok);
+}
+.checks li::after {
+  content: ""; position: absolute; left: 6px; top: calc(.3em + 4px); width: 5px; height: 9px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: .97rem; }
+th, td { padding: 12px 16px; text-align: center; border-bottom: 1px solid var(--border); }
+th:first-child, td:first-child { text-align: left; }
+thead th { font-size: .88rem; color: var(--muted); font-weight: 600; background: var(--bg-alt); }
+thead th.us { color: var(--accent); }
+tbody tr:last-child td { border-bottom: 0; }
+td.us { background: color-mix(in srgb, var(--accent) 8%, transparent); font-weight: 600; }
+.y { color: var(--ok); font-weight: 700; }
+.p { color: var(--muted); font-size: .88rem; }
+.no { color: var(--muted); opacity: .7; }
+.legend { margin-top: 10px; font-size: .88rem; color: var(--muted); }
+
+.dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+.dl .card h3 { font-family: var(--mono); font-size: .98rem; word-break: break-all; }
+.dl .size { color: var(--accent); font-weight: 600; margin-top: 6px; }
+.req { margin-top: 24px; color: var(--muted); }
+
+.faq { display: grid; gap: 28px; max-width: 50em; }
+.faq p { margin-top: 8px; color: var(--muted); }
+
+footer { border-top: 1px solid var(--border); padding: 36px 0 48px; color: var(--muted); font-size: .92rem; }
+footer .wrap { display: grid; gap: 10px; }
+footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="images/logo.png" alt="VHD Studio logo" width="30" height="30">VHD Studio</a>
+    <nav aria-label="Main">
+      <a href="#features">Features</a>
+      <a href="#safety">Data safety</a>
+      <a href="#download">Download</a>
+      <a href="#faq">FAQ</a>
+      <a class="gh" href="https://github.com/tgundhus/VHD-Studio">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+<div class="hero">
+  <div class="wrap">
+    <div>
+      <h1>The free VHD and VHDX manager for Windows. No <span style="white-space:nowrap">Hyper-V</span> needed.</h1>
+      <p class="lede">Attach, auto-mount, compact, resize, convert and repair virtual disks on any Windows 10 or 11 edition, including Home. Right-click a VHD, VHDX or ISO in Explorer to attach it, and let VHD Studio re-attach your disks at every startup.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/tgundhus/VHD-Studio/releases/latest">Download for Windows</a>
+        <a class="btn btn-ghost" href="https://github.com/tgundhus/VHD-Studio">Source on GitHub</a>
+      </div>
+      <p class="meta">Version __VERSION__ · Windows 10 1809+ and Windows 11 (x64) · MIT license</p>
+      <ul class="chips" aria-label="Highlights">
+        <li>Works on Windows Home</li>
+        <li>Verified backups</li>
+        <li>DiskPart GUI</li>
+        <li>Successor to VHD Attach</li>
+      </ul>
+    </div>
+    <div class="shot"><img src="images/main-window.png" width="886" height="653" alt="VHD Studio main window showing the details of an attached dynamic VHDX file"></div>
+  </div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>What VHD Studio fixes</h2>
+      <p>Windows can open a virtual disk, but the jobs around it need the Hyper-V PowerShell module (missing on Windows Home), <code>diskpart</code> scripts or Disk Management. VHD Studio does them in one window.</p>
+    </div>
+    <div class="grid">
+      <article class="card">
+        <h3><span class="n">01</span>Compact a VHDX without Hyper-V</h3>
+        <p>WSL 2 and Docker Desktop <code>ext4.vhdx</code> files only ever grow, and <code>Optimize-VHD</code> isn't available on Home. Compact VHD and VHDX files in full (NTFS/ReFS-aware) or zeroed-blocks-only mode for Linux images, optionally after <code>wsl --shutdown</code>, and see the size before and after.</p>
+      </article>
+      <article class="card">
+        <h3><span class="n">02</span>Auto-mount VHD and VHDX at startup</h3>
+        <p>Windows forgets attached disks on reboot, Dev Drive VHDX files included. A small Windows service re-attaches them at boot: read-only, without a drive letter, or mounted into an empty folder. Users without admin rights can attach disks they have access to.</p>
+      </article>
+      <article class="card">
+        <h3><span class="n">03</span>Fix “Access denied” after a crash</h3>
+        <p>A VHDX that wasn't closed cleanly after a crash or power loss has a pending log, and Windows refuses it with a confusing error. VHD Studio detects the log and replays it so the disk attaches normally.</p>
+      </article>
+      <article class="card">
+        <h3><span class="n">04</span>Resize, shrink and convert</h3>
+        <p>Grow VHD and VHDX files, or shrink a VHDX to its smallest safe size. Convert VHD ↔ VHDX, dynamic ↔ fixed, and 512 ↔ 4K logical sectors. The source file is never modified.</p>
+      </article>
+      <article class="card">
+        <h3><span class="n">05</span>Repair differencing disk chains</h3>
+        <p>Create a child disk to experiment safely, then merge it into its parent or discard it. Fix a broken parent path after a move (the <code>Set-VHD -ParentPath</code> equivalent) or reset a duplicate disk identifier.</p>
+      </article>
+      <article class="card">
+        <h3><span class="n">06</span>A DiskPart GUI that's hard to misuse</h3>
+        <p>Initialize, partition, format, extend and shrink, assign letters and folder mounts. System and boot disks can't be changed, physical disks stay read-only until you unlock them, and every change shows the equivalent PowerShell command first.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="screenshots">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Screenshots</h2>
+    </div>
+    <div class="figs">
+      <figure>
+        <div class="shot"><img src="images/maintenance.png" width="886" height="613" loading="lazy" alt="Maintenance window with options to compact, resize, convert, create a differencing disk, merge and repair a VHDX"></div>
+        <figcaption><b>Maintenance.</b> Compact, resize, convert, merge, repair and inspect a disk. Every in-place change makes a verified backup first.</figcaption>
+      </figure>
+      <figure>
+        <div class="shot"><img src="images/disk-manager.png" width="986" height="633" loading="lazy" alt="Disk Manager listing disks, partitions and volumes, with virtual disks highlighted next to their backing files"></div>
+        <figcaption><b>Disk Manager.</b> Disks, partitions and volumes, with virtual disks highlighted and shown with their backing file.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section id="safety">
+  <div class="wrap split">
+    <div class="section-head">
+      <h2>Built not to lose your data</h2>
+      <p>No action in VHD Studio loses data unless you chose a destructive action and confirmed it. An end-to-end test suite checks the data on real virtual disks byte for byte after every operation.</p>
+      <p><a href="https://github.com/tgundhus/VHD-Studio/blob/master/docs/SAFETY.md">Read the full data-safety model</a></p>
+    </div>
+    <ul class="checks">
+      <li>A verified backup before every in-place change: the checksum is re-read from disk, and Windows must be able to open the backup as a virtual disk.</li>
+      <li>Disks that are attached, in use, or changed since you selected them are refused, not guessed at.</li>
+      <li>New disks, conversions and backups never replace an existing file.</li>
+      <li>System, boot, page-file and image-hosting disks are protected.</li>
+      <li>Volumes are flushed and locked before detach. Open files mean a retry prompt, not lost work.</li>
+      <li>Destructive actions need typed confirmation, and every change is written to an audit log.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="alt" id="compare">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>VHD Studio compared with the built-in Windows tools</h2>
+      <p>The Hyper-V PowerShell module covers most of these jobs but has no GUI and isn't available on Windows Home. Disk Management has a GUI but can't maintain disks or keep them attached.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Task</th><th scope="col">Disk Management</th><th scope="col">diskpart</th><th scope="col">Hyper-V PowerShell</th><th scope="col" class="us">VHD Studio</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Attach / detach</th><td class="y">✔</td><td class="y">✔</td><td class="y">✔</td><td class="us y">✔</td></tr>
+          <tr><th scope="row">Re-attach at startup</th><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="us y">✔</td></tr>
+          <tr><th scope="row">Compact</th><td class="no">–</td><td class="y">✔</td><td class="y">✔</td><td class="us y">✔</td></tr>
+          <tr><th scope="row">Shrink a VHDX</th><td class="no">–</td><td class="no">–</td><td class="y">✔</td><td class="us y">✔</td></tr>
+          <tr><th scope="row">Convert VHD ↔ VHDX, fixed ↔ dynamic</th><td class="no">–</td><td class="no">–</td><td class="y">✔</td><td class="us y">✔</td></tr>
+          <tr><th scope="row">Merge / fix parent chain</th><td class="no">–</td><td class="p">partial</td><td class="y">✔</td><td class="us y">✔</td></tr>
+          <tr><th scope="row">Works on Windows Home</th><td class="y">✔</td><td class="y">✔</td><td class="no">–</td><td class="us y">✔</td></tr>
+          <tr><th scope="row">Graphical interface</th><td class="y">✔</td><td class="no">–</td><td class="no">–</td><td class="us y">✔</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="legend">✔ supported · – not supported</p>
+  </div>
+</section>
+
+<section id="vhd-attach">
+  <div class="wrap split">
+    <div class="section-head">
+      <h2>The successor to VHD Attach</h2>
+    </div>
+    <div>
+      <p>VHD Studio is based on <a href="https://github.com/medo64/VhdAttach">VHD Attach</a> by Josip Medved, who created it and maintained versions 1.0 to 4.22 from 2009 to 2020. The attach engine and auto-mount service are his work. VHD Studio 5 moves the code to .NET 10 and adds the maintenance tools, the Disk Manager and data-safety hardening.</p>
+      <p style="margin-top:14px">Upgrading is automatic: setup removes VHD Attach 4.x and its service, and keeps your auto-mount list.</p>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="download">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Download VHD Studio __VERSION__</h2>
+      <p>Pick an installer from the <a href="https://github.com/tgundhus/VHD-Studio/releases/latest">latest release on GitHub</a>. Both install the same app.</p>
+    </div>
+    <div class="dl">
+      <article class="card">
+        <h3>vhdstudio-__VERSION__-setup-standalone.exe</h3>
+        <p class="size">About 36 MB</p>
+        <p>Use this if you just want it to work. .NET is embedded, so there's nothing else to install.</p>
+      </article>
+      <article class="card">
+        <h3>vhdstudio-__VERSION__-setup.exe</h3>
+        <p class="size">About 2.4 MB</p>
+        <p>For centrally managed machines. Uses the shared .NET 10 Desktop Runtime (x64), which Windows Update, WSUS or Intune keep patched. Setup links to it if it's missing.</p>
+      </article>
+    </div>
+    <p class="req">Requires Windows 10 1809 or later, or Windows 11 (x64). Works on Home, Pro and Enterprise.</p>
+    <div class="cta" style="margin-top:20px">
+      <a class="btn btn-primary" style="background:var(--accent);color:var(--accent-text)" href="https://github.com/tgundhus/VHD-Studio/releases/latest">Go to the latest release</a>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Frequently asked questions</h2>
+    </div>
+    <div class="faq">
+      <div>
+        <h3>Does VHD Studio need Hyper-V?</h3>
+        <p>No. VHD Studio uses VirtDisk.dll and the Storage Management API, which are part of every Windows 10 and 11 edition, including Home. The Hyper-V PowerShell module is not needed.</p>
+      </div>
+      <div>
+        <h3>How do I compact a WSL or Docker ext4.vhdx file?</h3>
+        <p>Run <code>fstrim</code> inside the Linux distribution so freed space is zeroed, then open the <code>ext4.vhdx</code> in VHD Studio and choose Maintenance → Compact → Zeroed blocks only. VHD Studio can run <code>wsl --shutdown</code> first to release the file, and shows the size before and after.</p>
+      </div>
+      <div>
+        <h3>How do I auto-mount a VHD or VHDX at startup?</h3>
+        <p>Open the disk in VHD Studio and turn on auto-mount from the toolbar. The VHD Studio service re-attaches it at every boot, optionally read-only, without a drive letter, or mounted into an empty folder. This also works for Dev Drive VHDX files, which Windows does not re-attach on its own.</p>
+      </div>
+      <div>
+        <h3>Why does my VHDX give “Access denied” after a crash?</h3>
+        <p>A VHDX that was not closed cleanly, for example after a crash or power loss, has a log that has not been replayed, and Windows refuses to attach it. VHD Studio detects the pending log and replays it so the disk attaches normally. A read-only attach never writes to the file; it points you to Repair → Replay log, which makes a backup first.</p>
+      </div>
+      <div>
+        <h3>Is VHD Studio the same as VHD Attach?</h3>
+        <p>VHD Studio is the successor to VHD Attach by Josip Medved, who maintained versions 1.0 to 4.22 from 2009 to 2020. VHD Studio 5 keeps his attach engine and auto-mount service and adds maintenance tools, a Disk Manager and data-safety hardening. Setup removes VHD Attach 4.x automatically and keeps your auto-mount list.</p>
+      </div>
+      <div>
+        <h3>Is VHD Studio free?</h3>
+        <p>Yes. VHD Studio is free and open source under the MIT license. The source code is on <a href="https://github.com/tgundhus/VHD-Studio">GitHub</a>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <nav aria-label="Project">
+      <a href="https://github.com/tgundhus/VHD-Studio">GitHub</a>
+      <a href="https://github.com/tgundhus/VHD-Studio/releases">Releases</a>
+      <a href="https://github.com/tgundhus/VHD-Studio/blob/master/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/tgundhus/VHD-Studio/blob/master/docs/SAFETY.md">Data safety</a>
+      <a href="https://github.com/tgundhus/VHD-Studio/issues">Report a bug</a>
+    </nav>
+    <p>VHD Studio © 2026 Tobias Gundhus, xGND Software. MIT license. Based on VHD Attach © 2009-2020 Josip Medved.</p>
+  </div>
+</footer>
+</body>
+</html>

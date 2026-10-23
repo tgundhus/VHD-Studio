@@ -447,6 +447,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
         <p>For centrally managed machines. The main app uses the shared .NET 10 Desktop Runtime (x64), which Windows Update, WSUS or Intune keep patched. Setup links to it if it's missing. Recovery always has its own embedded runtime.</p>
       </article>
     </div>
+    <p>You can switch between the standalone and shared-runtime packages during an upgrade. Setup stops the previous service before replacing files; the shared-runtime package uses the globally installed .NET 10 runtime even when a previous standalone installation left runtime files in the app folder.</p>
     <p class="req">Requires Windows 10 1809 or later, or Windows 11 (x64). Works on Home, Pro and Enterprise.</p>
     <div class="cta" style="margin-top:20px">
       <a class="btn btn-primary" style="background:var(--accent);color:var(--accent-text)" href="https://github.com/tgundhus/VHD-Studio/releases/latest">Go to the latest release</a>

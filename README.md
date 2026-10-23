@@ -137,6 +137,10 @@ The application, service, VSUX library, recovery tool and both release installer
 Upgrading from **VHD Attach 4.x**: setup removes the old version and its service automatically and
 keeps your auto-mount list.
 
+You can switch between the standalone and shared-runtime packages during an upgrade. Setup stops
+the previous service before replacing files; the shared-runtime package uses the globally installed
+.NET 10 runtime even when a previous standalone installation left runtime files in the app folder.
+
 Requires Windows 10 1809 or later, or Windows 11 (x64). Works on Home, Pro and Enterprise.
 
 

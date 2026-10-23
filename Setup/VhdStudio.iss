@@ -181,16 +181,64 @@ Root: HKCR;  Subkey: "Windows.IsoFile\shell\VhdAttach-Detach\command";         V
 
 
 [Run]
-Filename: "{app}\{#ServiceExe}";  Parameters: "/Install";  StatusMsg: "Installing service...";  Flags: runascurrentuser waituntilterminated runhidden;
 Filename: "{app}\{#AppExe}";                                Flags: postinstall nowait skipifsilent runasoriginaluser unchecked;  Description: "Launch {#AppName} now";
 
 
 [UninstallRun]
-Filename: "{app}\{#ServiceExe}";  Parameters: "/Uninstall";  Flags: runascurrentuser waituntilterminated runhidden;  RunOnceId: "UninstallService"
-Filename: "{sys}\taskkill.exe";   Parameters: "/F /IM {#ServiceExe}";  Flags: runhidden waituntilterminated;  RunOnceId: "EndServiceProcess"
+; Supersede these IDs in old, appended uninstall logs. Service cleanup now uses the native code below.
+Filename: "{sys}\cmd.exe"; Parameters: "/D /C exit 0"; Flags: runhidden waituntilterminated; RunOnceId: "UninstallService"
+Filename: "{sys}\cmd.exe"; Parameters: "/D /C exit 0"; Flags: runhidden waituntilterminated; RunOnceId: "EndServiceProcess"
 
 
 [Code]
+
+type
+  TServiceStatus = record
+    ServiceType, CurrentState, ControlsAccepted, Win32ExitCode,
+    ServiceSpecificExitCode, CheckPoint, WaitHint: LongWord;
+  end;
+  TServiceStatusProcess = record
+    ServiceType, CurrentState, ControlsAccepted, Win32ExitCode,
+    ServiceSpecificExitCode, CheckPoint, WaitHint, ProcessId, ServiceFlags: LongWord;
+  end;
+  TProcessIds = array[0..4095] of LongWord;
+
+function OpenSCManager(MachineName, DatabaseName: Integer; DesiredAccess: LongWord): THandle;
+  external 'OpenSCManagerW@advapi32.dll stdcall';
+function OpenService(Manager: THandle; Name: String; DesiredAccess: LongWord): THandle;
+  external 'OpenServiceW@advapi32.dll stdcall';
+function CloseServiceHandle(Handle: THandle): Boolean;
+  external 'CloseServiceHandle@advapi32.dll stdcall';
+function QueryServiceStatusEx(Service: THandle; InfoLevel: LongWord;
+  var Status: TServiceStatusProcess; BufferSize: LongWord; var BytesNeeded: LongWord): Boolean;
+  external 'QueryServiceStatusEx@advapi32.dll stdcall';
+function ControlService(Service: THandle; Control: LongWord; var Status: TServiceStatus): Boolean;
+  external 'ControlService@advapi32.dll stdcall';
+function DeleteService(Service: THandle): Boolean;
+  external 'DeleteService@advapi32.dll stdcall';
+function CreateService(Manager: THandle; Name, DisplayName: String;
+  DesiredAccess, ServiceType, StartType, ErrorControl: LongWord; BinaryPath: String;
+  LoadOrderGroup, TagId, Dependencies, ServiceStartName, Password: Integer): THandle;
+  external 'CreateServiceW@advapi32.dll stdcall';
+function ChangeServiceConfig(Service: THandle; ServiceType, StartType, ErrorControl: LongWord;
+  BinaryPath: String; LoadOrderGroup, TagId, Dependencies, ServiceStartName, Password: Integer;
+  DisplayName: String): Boolean;
+  external 'ChangeServiceConfigW@advapi32.dll stdcall';
+function StartService(Service: THandle; ArgCount, Args: LongWord): Boolean;
+  external 'StartServiceW@advapi32.dll stdcall';
+function OpenProcess(DesiredAccess: LongWord; InheritHandle: Boolean; ProcessId: LongWord): THandle;
+  external 'OpenProcess@kernel32.dll stdcall';
+function QueryFullProcessImageName(Process: THandle; Flags: LongWord; FileName: String;
+  var Size: LongWord): Boolean;
+  external 'QueryFullProcessImageNameW@kernel32.dll stdcall';
+function WaitForSingleObject(Handle: THandle; Milliseconds: LongWord): LongWord;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function TerminateProcess(Process: THandle; ExitCode: LongWord): Boolean;
+  external 'TerminateProcess@kernel32.dll stdcall';
+function CloseHandle(Handle: THandle): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+function EnumProcesses(var ProcessIds: TProcessIds; Size: LongWord; var BytesReturned: LongWord): Boolean;
+  external 'EnumProcesses@psapi.dll stdcall';
 
 const
   LegacyUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\JosipMedved_VhdAttach_is1';
@@ -202,41 +250,33 @@ begin
   WizardForm.LicenseAcceptedRadio.Checked := True;
 end;
 
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  Handler: String;
-begin
-  if (CurUninstallStep = usUninstall) and RegQueryStringValue(HKCR, '.vsux', '', Handler) and (Handler = 'VhdStudio.Vsux') then
-    RegDeleteValue(HKCR, '.vsux', '');
-end;
-
-function HasVersion10OrNewer(const Names: TArrayOfString): Boolean;
+function HasVersion10(const Names: TArrayOfString): Boolean;
 var
   I: Integer;
 begin
   Result := False;
   for I := 0 to GetArrayLength(Names) - 1 do begin
-    if StrToIntDef(Copy(Names[I], 1, Pos('.', Names[I]) - 1), 0) >= 10 then begin
+    if (Pos('10.', Names[I]) = 1) and (Pos('-', Names[I]) = 0) then begin
       Result := True;
       Exit;
     end;
   end;
 end;
 
-{ Framework-dependent build: needs the .NET Desktop Runtime 10 or newer (x64).
+{ Framework-dependent build: needs a stable .NET Desktop Runtime 10 (x64).
   The .NET installer registers versions in the 32-bit registry view (WOW6432Node); the runtime folder is checked as well. }
 function IsDesktopRuntimeInstalled: Boolean;
 var
   Names: TArrayOfString;
   FindRec: TFindRec;
 begin
-  Result := (RegGetValueNames(HKLM32, DesktopRuntimeKey, Names) and HasVersion10OrNewer(Names))
-         or (RegGetValueNames(HKLM64, DesktopRuntimeKey, Names) and HasVersion10OrNewer(Names));
+  Result := (RegGetValueNames(HKLM32, DesktopRuntimeKey, Names) and HasVersion10(Names))
+         or (RegGetValueNames(HKLM64, DesktopRuntimeKey, Names) and HasVersion10(Names));
   if Result then Exit;
   if FindFirst(ExpandConstant('{commonpf64}\dotnet\shared\Microsoft.WindowsDesktop.App\*'), FindRec) then begin
     try
       repeat
-        if ((FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0) and (StrToIntDef(Copy(FindRec.Name, 1, Pos('.', FindRec.Name) - 1), 0) >= 10) then begin
+        if ((FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0) and (Pos('10.', FindRec.Name) = 1) and (Pos('-', FindRec.Name) = 0) then begin
           Result := True;
           Exit;
         end;
@@ -262,19 +302,233 @@ begin
   end;
 end;
 
-{ VHD Studio 5.0.0's service process could stay alive after "stop" and lock its files.
-  Make sure it is gone before files are replaced: stop, give it time, then end the process as a last resort. }
-procedure StopServiceProcess;
+function ServiceError(const Operation: String): String;
 var
-  ResultCode, I: Integer;
+  ErrorCode: LongWord;
 begin
-  Exec(ExpandConstant('{sys}\sc.exe'), 'stop VhdStudio', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  for I := 1 to 10 do begin
-    if not Exec(ExpandConstant('{sys}\cmd.exe'), '/c tasklist /FI "IMAGENAME eq {#ServiceExe}" | find /I "{#ServiceExe}" >nul', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then Exit;
-    Sleep(500);
+  ErrorCode := DLLGetLastError;
+  Result := Operation + ': ' + SysErrorMessage(ErrorCode) + ' (' + IntToStr(ErrorCode) + ').';
+  Log(Result);
+end;
+
+function ReadServiceStatus(Service: THandle; var Status: TServiceStatusProcess): String;
+var
+  BytesNeeded: LongWord;
+begin
+  Result := '';
+  if not QueryServiceStatusEx(Service, 0, Status, SizeOf(Status), BytesNeeded) then
+    Result := ServiceError('Cannot query the VHD Studio service');
+end;
+
+function EndServiceProcess(Process: THandle; GraceMilliseconds: LongWord): String;
+var
+  WaitResult: LongWord;
+begin
+  Result := '';
+  WaitResult := WaitForSingleObject(Process, GraceMilliseconds);
+  if WaitResult = 0 then Exit;
+  if WaitResult <> $102 then begin Result := ServiceError('Cannot wait for the old VHD Studio service'); Exit; end;
+  Log('Service did not exit; terminating its verified process.');
+  if not TerminateProcess(Process, 0) then begin
+    if WaitForSingleObject(Process, 0) = 0 then Exit; { exited between the wait and termination }
+    Result := ServiceError('Cannot terminate the old VHD Studio service'); Exit;
   end;
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#ServiceExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Sleep(1000);
+  if WaitForSingleObject(Process, 5000) <> 0 then
+    Result := 'The old VHD Studio service process did not exit. Restart Windows, then run setup again.';
+end;
+
+{ A previous setup may have left a foreground thread, pending service stop, or hidden
+  /Uninstall host dialog alive. Match the complete installed path, never just its name. }
+function EndInstalledServiceProcesses: String;
+var
+  ProcessIds: TProcessIds;
+  BytesReturned, ImagePathLength: LongWord;
+  Process: THandle;
+  ImagePath: String;
+  I: Integer;
+begin
+  Result := '';
+  if not EnumProcesses(ProcessIds, SizeOf(ProcessIds), BytesReturned) then begin
+    Result := ServiceError('Cannot check for old VHD Studio service processes'); Exit;
+  end;
+  if BytesReturned = SizeOf(ProcessIds) then begin
+    Result := 'Too many processes to verify the old service safely. Restart Windows, then run setup again.'; Exit;
+  end;
+  for I := 0 to (BytesReturned div 4) - 1 do begin
+    Process := OpenProcess($00101001, False, ProcessIds[I]);
+    if Process <> 0 then begin
+      try
+        ImagePathLength := 32768;
+        SetLength(ImagePath, ImagePathLength);
+        if QueryFullProcessImageName(Process, 0, ImagePath, ImagePathLength) then begin
+          SetLength(ImagePath, ImagePathLength);
+          if CompareText(ImagePath, ExpandConstant('{app}\{#ServiceExe}')) = 0 then begin
+            Log('Ending process from old installation, PID ' + IntToStr(ProcessIds[I]) + ': ' + ImagePath);
+            Result := EndServiceProcess(Process, 0);
+            if Result <> '' then Exit;
+          end;
+        end;
+      finally
+        CloseHandle(Process);
+      end;
+    end;
+  end;
+end;
+
+{ Keep a handle to the SCM's process before requesting stop: older versions can report
+  STOPPED while their process still holds files open. Never kill by image name or a reused PID. }
+function StopServiceProcess(RemoveRegistration: Boolean): String;
+var
+  Manager, Service, Process: THandle;
+  Status: TServiceStatusProcess;
+  StopStatus: TServiceStatus;
+  ImagePath: String;
+  ImagePathLength, ErrorCode: LongWord;
+  I: Integer;
+begin
+  Result := '';
+  Process := 0;
+  Manager := OpenSCManager(0, 0, $0001); { SC_MANAGER_CONNECT }
+  if Manager = 0 then begin Result := ServiceError('Cannot open the service manager'); Exit; end;
+  try
+    Service := OpenService(Manager, 'VhdStudio', $00010024); { DELETE | QUERY_STATUS | STOP }
+    if Service = 0 then begin
+      if DLLGetLastError = 1060 then Result := EndInstalledServiceProcesses
+      else Result := ServiceError('Cannot open the VHD Studio service');
+      Exit;
+    end;
+    try
+      Result := ReadServiceStatus(Service, Status);
+      if Result <> '' then Exit;
+      if Status.ServiceType <> $10 then begin
+        Result := 'The VHD Studio service has an unexpected service type. Stop it manually before continuing.'; Exit;
+      end;
+      if not RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Services\VhdStudio', 'ImagePath', ImagePath) then begin
+        Result := 'Cannot verify the registered VHD Studio service executable.'; Exit;
+      end;
+      if CompareText(RemoveQuotes(ImagePath), ExpandConstant('{app}\{#ServiceExe}')) <> 0 then begin
+        Result := 'The VHD Studio service points to another installation: ' + ImagePath + '. Stop that service before continuing.'; Exit;
+      end;
+      if (Status.CurrentState >= 4) and (Status.CurrentState <= 7) and (Status.ProcessId <> 0) and
+         (Status.ServiceType = $10) and (Status.ServiceFlags = 0) then begin
+        Process := OpenProcess($00101001, False, Status.ProcessId); { SYNCHRONIZE | QUERY_LIMITED_INFORMATION | TERMINATE }
+        if Process = 0 then begin Result := ServiceError('Cannot inspect the VHD Studio service process'); Exit; end;
+        ImagePathLength := 32768;
+        SetLength(ImagePath, ImagePathLength);
+        if not QueryFullProcessImageName(Process, 0, ImagePath, ImagePathLength) then begin
+          Result := ServiceError('Cannot verify the VHD Studio service executable'); Exit;
+        end;
+        SetLength(ImagePath, ImagePathLength);
+        if CompareText(ImagePath, ExpandConstant('{app}\{#ServiceExe}')) <> 0 then begin
+          Result := 'The VHD Studio service points to another installation: ' + ImagePath + '. Stop that service before continuing.';
+          Exit;
+        end;
+        Log('Stopping VHD Studio service PID ' + IntToStr(Status.ProcessId) + ': ' + ImagePath);
+      end;
+
+      if (Status.CurrentState <> 1) and (Status.CurrentState <> 3) then begin
+        if not ControlService(Service, 1, StopStatus) then begin { SERVICE_CONTROL_STOP }
+          ErrorCode := DLLGetLastError;
+          if (ErrorCode <> 1053) and (ErrorCode <> 1061) and (ErrorCode <> 1062) then begin
+            Result := 'Cannot stop the VHD Studio service: ' + SysErrorMessage(ErrorCode) + '.'; Exit;
+          end;
+        end;
+      end;
+      for I := 1 to 80 do begin { at most 20 seconds for a graceful stop }
+        Result := ReadServiceStatus(Service, Status);
+        if (Result <> '') or (Status.CurrentState = 1) then Break;
+        Sleep(250);
+      end;
+      if Result <> '' then Exit;
+
+      if Process <> 0 then begin
+        Result := EndServiceProcess(Process, 5000);
+        if Result <> '' then Exit;
+      end;
+      { Pending-state SCM PIDs are undefined. After the grace period, use full-path
+        process evidence instead; this also clears an already-stopped orphan. }
+      Result := EndInstalledServiceProcesses;
+      if Result <> '' then Exit;
+      for I := 1 to 20 do begin { let SCM observe the process exit }
+        Result := ReadServiceStatus(Service, Status);
+        if (Result <> '') or (Status.CurrentState = 1) then Break;
+        Sleep(250);
+      end;
+      if Result <> '' then Exit;
+      if Status.CurrentState <> 1 then begin
+        Result := 'The VHD Studio service did not stop. Restart Windows, then run setup again.'; Exit;
+      end;
+      if RemoveRegistration and not DeleteService(Service) then
+        Result := ServiceError('Cannot remove the VHD Studio service');
+    finally
+      if Process <> 0 then CloseHandle(Process);
+      CloseServiceHandle(Service);
+    end;
+  finally
+    CloseServiceHandle(Manager);
+  end;
+end;
+
+{ Install with native Windows APIs, so a missing runtime can never leave setup waiting
+  on an invisible .NET host dialog in either the old or the newly installed executable. }
+procedure InstallService;
+var
+  Manager, Service: THandle;
+  Status: TServiceStatusProcess;
+  Error, BinaryPath: String;
+  I: Integer;
+begin
+  BinaryPath := '"' + ExpandConstant('{app}\{#ServiceExe}') + '"';
+  Manager := OpenSCManager(0, 0, $0003); { CONNECT | CREATE_SERVICE }
+  if Manager = 0 then RaiseException(ServiceError('Cannot open the service manager'));
+  try
+    Service := OpenService(Manager, 'VhdStudio', $0016); { CHANGE_CONFIG | QUERY_STATUS | START }
+    if Service = 0 then begin
+      if DLLGetLastError <> 1060 then RaiseException(ServiceError('Cannot open the VHD Studio service'));
+      Service := CreateService(Manager, 'VhdStudio', '{#AppName}', $0016, $10, 2, 1,
+        BinaryPath, 0, 0, 0, 0, 0); { own process, automatic, LocalSystem }
+      if Service = 0 then RaiseException(ServiceError('Cannot create the VHD Studio service'));
+    end;
+    try
+      if not ChangeServiceConfig(Service, $10, 2, 1, BinaryPath, 0, 0, 0, 0, 0, '{#AppName}') then
+        RaiseException(ServiceError('Cannot configure the VHD Studio service'));
+      if not StartService(Service, 0, 0) then
+        RaiseException(ServiceError('Cannot start the VHD Studio service'));
+      for I := 1 to 80 do begin
+        Error := ReadServiceStatus(Service, Status);
+        if Error <> '' then RaiseException(Error);
+        if Status.CurrentState = 4 then Exit; { SERVICE_RUNNING }
+        if Status.CurrentState = 1 then
+          RaiseException('The VHD Studio service exited during startup: ' + SysErrorMessage(Status.Win32ExitCode) + '.');
+        Sleep(250);
+      end;
+      RaiseException('The VHD Studio service did not start within 20 seconds. Check the Windows event log.');
+    finally
+      CloseServiceHandle(Service);
+    end;
+  finally
+    CloseServiceHandle(Manager);
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then InstallService;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Handler, Error: String;
+begin
+  if CurUninstallStep = usUninstall then begin
+    Error := StopServiceProcess(True);
+    if Error <> '' then begin
+      SuppressibleMsgBox(Error, mbError, MB_OK, IDOK);
+      Abort; { stop before removing files if the service is still using them }
+    end;
+    if RegQueryStringValue(HKCR, '.vsux', '', Handler) and (Handler = 'VhdStudio.Vsux') then
+      RegDeleteValue(HKCR, '.vsux', '');
+  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -283,9 +537,9 @@ var
   Uninstaller: String;
   AutoAttach: String;
 begin
-  { Stop and remove the service of a previous VHD Studio version. }
-  Exec(ExpandConstant('{app}\{#ServiceExe}'), '/Uninstall', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  StopServiceProcess;
+  { Do not execute the previous service binary: its runtime may be missing or its helper hung. }
+  Result := StopServiceProcess(False);
+  if Result <> '' then Exit;
 
   { Carry over the VHD Attach 4.x auto-mount list; its uninstaller deletes the old key. }
   if not RegValueExists(HKLM64, 'Software\xGND Software\VHD Studio', 'AutoAttachVhdList') then begin

@@ -5,6 +5,11 @@ on:
     branches: [ master ]
   pull_request:
   workflow_dispatch:
+    inputs:
+      installerOnly:
+        description: 'Run installer regressions without repeating the product/data-safety suites'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -23,16 +28,46 @@ jobs:
         run: choco install innosetup --no-progress -y
 
       - name: Test (including elevated data-safety suite), publish and build installer
+        if: ${{ !inputs.installerOnly }}
         shell: pwsh
         run: ./Setup/Publish.ps1   # hosted runners are elevated, so the Elevated tests run on real virtual disks
+
+      - name: Publish regular installer (installer-only manual run)
+        if: ${{ inputs.installerOnly }}
+        shell: pwsh
+        run: ./Setup/Publish.ps1 -SkipTests
 
       - name: Build standalone installer (.NET runtime embedded)
         shell: pwsh
         run: ./Setup/Publish.ps1 -SkipTests -SelfContained
 
       - name: Data-safety suite must run elevated (an all-skipped run fails)
+        if: ${{ !inputs.installerOnly }}
         shell: pwsh
         run: dotnet test Source/VhdAttach-Test/VhdAttach-Test.csproj -c Release -- --filter "TestCategory=Elevated"
+
+      - name: Download previous release as installer upgrade fixture
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download v5.1.0 --repo tgundhus/VHD-Studio --pattern vhdstudio-5.1.0-setup.exe --dir "$env:RUNNER_TEMP/previous-release"
+
+      - name: Test real installer upgrades on this disposable runner
+        shell: pwsh
+        run: |
+          [xml] $props = Get-Content Source/Directory.Build.props
+          $version = $props.Project.PropertyGroup.Version
+          ./Setup/Test-Installer.ps1 `
+            -PreviousInstaller "$env:RUNNER_TEMP/previous-release/vhdstudio-5.1.0-setup.exe" `
+            -RegularInstaller "$pwd/Releases/vhdstudio-$version-setup.exe" `
+            -StandaloneInstaller "$pwd/Releases/vhdstudio-$version-setup-standalone.exe"
+
+      - name: Upload installer smoke results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-smoke-results
+          path: TestResults/Installer/**
 
       - name: Upload test results
         if: failure()

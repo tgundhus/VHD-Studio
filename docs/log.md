@@ -68,3 +68,8 @@ Read this when you want to know what changed in the documentation and when. Appe
   Inno Setup compiler, valid timestamped xGND signatures through `sign-file`, signed uninstallers,
   the recovery executable's help smoke check and matching uploaded installer hashes. Kept the original
   80 product tests and 19 VSUX checks identified as the initial integration verification.
+- Added the 5.1.1 changelog for service-stop hangs during upgrades and incorrect runtime lookup after
+  switching installer types. Updated [README.md](../README.md) and [the website](../site/index.html)
+  to explain switching packages and the shared-runtime lookup policy.
+- Updated [BUILD.md](../BUILD.md) with the disposable installer regression suite and its guarded
+  `installerOnly` CI mode, covering upgrades from 5.1.0, stuck services, runtime switching and uninstall.

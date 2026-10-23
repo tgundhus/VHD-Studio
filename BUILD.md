@@ -65,6 +65,12 @@ of the application, service, VSUX library, recovery tool and both installers. Co
 release source, then create a matching tag and GitHub release with both signed installers attached.
 Use the changelog for the release notes, including VSUX's experimental status and recovery limits.
 
+The workflow also runs `Setup\Test-Installer.ps1` on its disposable Windows runner. It installs
+5.1.0, exercises hung and lingering service processes, switches both installer types, checks app
+and service runtime loading, and uninstalls. The script refuses to run on a development PC.
+For installer-only changes, dispatch the Build workflow with `installerOnly=true` to run these
+checks without repeating the product and disk-safety suites.
+
 
 #### Project layout ####
 

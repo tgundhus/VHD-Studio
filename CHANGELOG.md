@@ -1,5 +1,19 @@
 # Changelog
 
+## 5.1.1
+
+### Fixed
+- Setup no longer starts the previous service executable and waits indefinitely for it. A hidden
+  .NET startup error could block the upgrade before its service-stop fallback was reached. Setup
+  now manages the service directly through Windows, waits for its process to exit, and reports a
+  failure if it cannot stop it. Uninstall uses the same path and retires the old logged helper actions.
+- Installing the shared-runtime package over a standalone installation could leave runtime files
+  that caused the application and service to ignore the installed .NET runtime and show
+  "You must install or update .NET". Shared-runtime executables now explicitly use the globally
+  installed runtime. Standalone packages continue using their embedded runtime.
+- The shared-runtime prerequisite check now requires a stable .NET 10 Desktop Runtime; .NET 11
+  alone or a preview runtime no longer satisfies it.
+
 ## 5.1.0
 
 ### New

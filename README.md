@@ -56,7 +56,9 @@ VHD Studio is developed by **Tobias Gundhus ([xGND Software](https://github.com/
 
 Choose **New → VSUX (soft protected drive)** to create a blank locked image and set its password.
 Click **Attach** and enter the password, then use **Disk Manager** to initialize and format the
-new blank disk. To protect an existing detached standalone VHDX, open **Maintenance**, select
+new blank disk. If Attach succeeds but Explorer shows no drive, **Drive → Disk Manager…**
+opens the attached disk in Disk Manager for explicit partition, format and drive-letter actions.
+To protect an existing detached standalone VHDX, open **Maintenance**, select
 **Soft protection**, then click **Protect as VSUX…** and set a password. It renames the image to
 `.vsux` in the same folder without copying the payload. New VSUX images store their password
 information inside the file: no JSON companion is needed, including on another PC.

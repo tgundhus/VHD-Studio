@@ -4,12 +4,14 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Windows.Forms;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using VhdAttach.Storage;
 using VhdAttachCommon;
 using VhdStudio.Vsux;
 
@@ -163,6 +165,140 @@ namespace VhdAttachTest {
             } finally { Environment.ExitCode = savedExitCode; }
             Assert.AreEqual(lockedHash, Hash(File.ReadAllBytes(container)), "Cancelling Attach changed the locked image.");
             Assert.IsTrue(VsuxOperations.GetInfo(container).IsLocked, "Cancelling Attach restored the VHDX signature.");
+        }
+
+        [TestMethod]
+        [TestCategory("Elevated")]
+        [DoNotParallelize]
+        public void Test_AttachedVsux_ExposesItsVolumeAndPreservesReadWriteContent() {
+            ScratchDisk.RequireElevation();
+            using (var original = ScratchDisk.Create()) {
+                original.Attach(readOnly: false);
+                var expected = original.WriteFiles(2, 1024 * 1024, "vsux-attach-");
+                original.Detach();
+                var container = Path.ChangeExtension(original.FileName, ".vsux");
+                try {
+                    VsuxOperations.Protect(original.FileName, container, Password);
+                    VsuxOperations.Attach(container, Password);
+                    var attached = VsuxOperations.GetInfo(container);
+                    Assert.IsTrue(attached.IsAttached);
+                    Assert.IsFalse(attached.IsLocked);
+                    var volume = WaitForVolume(attached.AttachedPath);
+                    AssertPayload(volume.VolumeName, expected);
+                    if (volume.DriveLetter2 == null) {
+                        var letter = VhdAttachService.DriveLetterMemory.FindFreeLetter(new HashSet<char>());
+                        Assert.IsNotNull(letter, "The disposable test volume needs one free drive letter.");
+                        volume.ChangeLetter(letter.Value + ":");
+                    }
+                    var bytes = RandomNumberGenerator.GetBytes(1024 * 1024);
+                    using (var file = new FileStream(Path.Combine(volume.VolumeName, "written-after-vsux-attach.bin"), FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) {
+                        file.Write(bytes);
+                    }
+                    expected.Add("written-after-vsux-attach.bin", Hash(bytes));
+
+                    RunSta(() => {
+                        using (var form = new VhdAttach.MainForm()) {
+                            typeof(VhdAttach.MainForm).GetField("VhdFileName", PrivateInstance).SetValue(form, container);
+                            RefreshCommands(form, container);
+                            AssertSelectedDisk(form, attached.AttachedPath);
+                            var drive = (ToolStripSplitButton)Command(form, "mnuDrive");
+                            Assert.IsTrue(drive.Enabled, "An attached VSUX volume must be accessible through Drive.");
+                            var open = drive.DropDownItems.OfType<ToolStripMenuItem>().Single(item => item.Text.StartsWith("Open ", StringComparison.Ordinal)
+                                && item.Tag is Volume target && target.VolumeName == volume.VolumeName);
+                            var target = (Volume)open.Tag;
+                            Assert.AreEqual(volume.PhysicalDriveNumber, target.PhysicalDriveNumber);
+                            Assert.AreEqual(volume.DriveLetter3, target.DriveLetter3, "Open must target this VSUX volume's drive letter.");
+                            AssertPayload(target.DriveLetter3, expected);
+                            Assert.IsFalse(Command(form, "mnuAttach").Enabled);
+                            Assert.IsTrue(Command(form, "mnuDetach").Enabled);
+                        }
+                    });
+
+                    VsuxOperations.Lock(container, Password);
+                    Assert.IsTrue(VsuxOperations.GetInfo(container).IsLocked);
+                    VsuxOperations.Attach(container, Password, readOnly: true);
+                    AssertPayload(WaitForVolume(VsuxOperations.GetInfo(container).AttachedPath).VolumeName, expected);
+                } finally {
+                    if (File.Exists(container)) {
+                        VsuxOperations.Lock(container, Password);
+                        File.Delete(container); // Only the uniquely named disk created by this test, after safe detach.
+                    }
+                }
+            }
+        }
+
+        [TestMethod]
+        [TestCategory("Elevated")]
+        [DoNotParallelize]
+        public void Test_AttachedBlankVsux_OffersDiskManagerForTheCorrectDiskWithoutInitializingIt() {
+            ScratchDisk.RequireElevation();
+            var image = this.CreateDisposableImage();
+            var container = Path.ChangeExtension(image, ".vsux");
+            VsuxOperations.Protect(image, container, Password);
+            try {
+                VsuxOperations.Attach(container, Password);
+                var attached = VsuxOperations.GetInfo(container);
+                Assert.IsTrue(attached.IsAttached, "A blank disk is attached even though it has no Explorer drive yet.");
+                var number = int.Parse(attached.AttachedPath.Substring(17), System.Globalization.CultureInfo.InvariantCulture);
+                var disk = WaitForStorageDisk(number, container);
+                Assert.IsTrue(disk.PartitionStyle is PartitionStyle.Raw or PartitionStyle.Mbr);
+                Assert.AreEqual(0, StorageManager.GetPartitions(number).Count);
+                Assert.AreEqual(0, Volume.GetVolumesOnPhysicalDrive(attached.AttachedPath).Count);
+
+                RunSta(() => {
+                    using (var form = new VhdAttach.MainForm()) {
+                        typeof(VhdAttach.MainForm).GetField("VhdFileName", PrivateInstance).SetValue(form, container);
+                        RefreshCommands(form, container);
+                        AssertSelectedDisk(form, attached.AttachedPath);
+                        var drive = (ToolStripSplitButton)Command(form, "mnuDrive");
+                        Assert.IsTrue(drive.Enabled, "A blank attached VSUX disk needs an available path to Disk Manager.");
+                        Assert.IsTrue(drive.DropDownItems.OfType<ToolStripMenuItem>().Any(item => item.Text.Contains("Disk Manager", StringComparison.Ordinal)));
+                        var list = (ListView)typeof(VhdAttach.MainForm).GetField("list", PrivateInstance).GetValue(form);
+                        var guidance = list.Items.Cast<ListViewItem>().Single(item => item.Text == "Drive access").SubItems[1].Text;
+                        StringAssert.Contains(guidance, "Disk Manager");
+                        Assert.IsFalse(Command(form, "mnuAttach").Enabled);
+                        Assert.IsTrue(Command(form, "mnuDetach").Enabled);
+                    }
+                });
+
+                Assert.AreEqual(disk.PartitionStyle, WaitForStorageDisk(number, container).PartitionStyle, "Displaying guidance initialized the blank disk.");
+                Assert.AreEqual(0, StorageManager.GetPartitions(number).Count, "Displaying guidance created a partition.");
+                Assert.AreEqual(0, Volume.GetVolumesOnPhysicalDrive(attached.AttachedPath).Count, "Displaying guidance formatted the blank disk.");
+            } finally { VsuxOperations.Lock(container, Password); }
+            Assert.IsTrue(VsuxOperations.GetInfo(container).IsLocked);
+        }
+
+        private static void AssertSelectedDisk(VhdAttach.MainForm form, string attachedPath) {
+            Assert.AreEqual(attachedPath, (string)typeof(VhdAttach.MainForm).GetMethod("GetSelectedAttachedPath", PrivateInstance).Invoke(form, null));
+            Assert.AreEqual(int.Parse(attachedPath.Substring(17), System.Globalization.CultureInfo.InvariantCulture),
+                (int?)typeof(VhdAttach.MainForm).GetMethod("GetSelectedDiskNumber", PrivateInstance).Invoke(form, null),
+                "Disk Manager must preselect this VSUX image's physical disk.");
+        }
+
+        private static Volume WaitForVolume(string attachedPath) {
+            for (var attempt = 0; attempt < 60; attempt++) {
+                var volume = Volume.GetVolumesOnPhysicalDrive(attachedPath).FirstOrDefault(candidate => Directory.Exists(candidate.VolumeName));
+                if (volume != null) { return volume; }
+                Thread.Sleep(250);
+            }
+            throw new AssertFailedException("The attached disposable VSUX volume did not appear.");
+        }
+
+        private static DiskInfo WaitForStorageDisk(int number, string container) {
+            for (var attempt = 0; attempt < 40; attempt++) {
+                var disk = StorageManager.GetDisks().SingleOrDefault(candidate => candidate.Number == number);
+                if (disk != null && disk.IsVirtual && string.Equals(PathGuard.GetLongPath(disk.Location ?? ""), container, StringComparison.OrdinalIgnoreCase)) { return disk; }
+                Thread.Sleep(250);
+            }
+            throw new AssertFailedException("The storage view does not identify the exact disposable VSUX file.");
+        }
+
+        private static void AssertPayload(string volumePath, IDictionary<string, string> expected) {
+            foreach (var pair in expected) {
+                using (var file = File.OpenRead(Path.Combine(volumePath, pair.Key))) {
+                    Assert.AreEqual(pair.Value, Convert.ToHexString(SHA256.HashData(file)), "VSUX attach changed " + pair.Key);
+                }
+            }
         }
 
         private string CreateDisposableImage() {

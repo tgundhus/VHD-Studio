@@ -17,6 +17,15 @@ Creation does not automatically attach or initialize the disk. Click **Attach**,
 **Disk Manager** to initialize the new blank disk and create and format a partition before
 storing files. When finished, use **Detach & lock**.
 
+If Attach succeeds but no drive appears in Explorer, open **Drive → Disk Manager…**
+or **Disk Manager**. VHD Studio selects the attached VSUX disk. Verify its backing filename,
+bring it online if needed, and initialize it only if its style is **Not initialized**. An
+already initialized MBR or GPT disk with no partitions needs **Disk → Create partition…**;
+choose a filesystem and drive letter there. For an existing formatted volume without a
+letter, select the partition and use **Partition → Assign drive letter**. Initialization,
+partition creation and formatting require explicit confirmation; Attach never performs them.
+Volumes with a drive letter are available from **Drive → Open …**.
+
 ## Protect an existing VHDX
 
 Start with a full backup and a detached standalone VHDX on a local physical drive. Open it

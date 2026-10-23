@@ -164,16 +164,28 @@ namespace VhdAttach {
             this.OpenMaintenance("Soft protection");
         }
 
-        private void OpenDiskManager() {
-            int? diskNumber = null;
+        private string GetSelectedAttachedPath() {
+            if (this.VhdFileName == null) { return null; }
+            if (VsuxOperations.IsVsuxPath(this.VhdFileName)) {
+                return VsuxOperations.GetInfo(this.VhdFileName).AttachedPath;
+            }
+            using (var document = new Medo.IO.VirtualDisk(this.VhdFileName)) {
+                document.Open(Medo.IO.VirtualDiskAccessMask.GetInfo | Medo.IO.VirtualDiskAccessMask.Detach);
+                return document.GetAttachedPath();
+            }
+        }
+
+        private int? GetSelectedDiskNumber() {
             try {
-                if (this.VhdFileName != null && !VsuxOperations.IsVsuxPath(this.VhdFileName)) {
-                    var attachedPath = VirtualDiskImage.GetDetails(this.VhdFileName).AttachedPath; //\\.\PhysicalDriveN
-                    var digits = attachedPath?.Substring(attachedPath.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9').Length);
-                    if (int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)) { diskNumber = number; }
-                }
+                var attachedPath = this.GetSelectedAttachedPath(); //\\.\PhysicalDriveN
+                if (attachedPath != null && attachedPath.StartsWith(@"\\.\PhysicalDrive", StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(attachedPath.Substring(17), NumberStyles.None, CultureInfo.InvariantCulture, out var number)) { return number; }
             } catch (Exception) { }
-            using (var form = new Storage.DiskManagerForm(diskNumber)) {
+            return null;
+        }
+
+        private void OpenDiskManager() {
+            using (var form = new Storage.DiskManagerForm(this.GetSelectedDiskNumber())) {
                 form.ShowDialog(this);
             }
             if (this.VhdFileName != null) { UpdateData(this.VhdFileName); }
@@ -566,10 +578,6 @@ namespace VhdAttach {
             mnuAutomount.Enabled = false;
             mnuAutomount.Tag = null;
             mnuAutomount.Text = "Auto-mount";
-            mnuDrive.Enabled = false;
-            mnuDrive.Tag = null;
-            mnuDrive.Text = "Drive";
-            mnuDrive.DropDownItems.Clear();
             this.mnuMaintenance.Enabled = true;
             this.mnuProtectVsux.Enabled = false;
             this.mnuVsuxConvert.Enabled = this.mnuVsuxPortable.Enabled = this.mnuVsuxBackup.Enabled = false;
@@ -588,7 +596,23 @@ namespace VhdAttach {
                 items.Add(new ListViewItem(new[] { "Status", state }) { Group = GroupDetails });
                 items.Add(new ListViewItem(new[] { "File size", Ui.FormatSize(info.Length) }) { Group = GroupFileSystem });
                 items.Add(new ListViewItem(new[] { "Identifier", info.DiskId.ToString() }) { Group = GroupDetails });
-                if (info.IsAttached) { items.Add(new ListViewItem(new[] { "Attached device", info.AttachedPath }) { Group = GroupFileSystem }); }
+                var volumes = new List<Volume>();
+                if (info.IsAttached) {
+                    items.Add(new ListViewItem(new[] { "Attached device", info.AttachedPath }) { Group = GroupFileSystem });
+                    var volumesReadable = true;
+                    try { volumes.AddRange(Volume.GetVolumesOnPhysicalDrive(info.AttachedPath)); } catch (Exception) { volumesReadable = false; }
+                    var letters = new List<string>();
+                    foreach (var volume in volumes) {
+                        if (volume.DriveLetter3 != null) { letters.Add(volume.DriveLetter3); }
+                    }
+                    var access = !volumesReadable ? "Unknown — open Drive → Disk Manager to check"
+                        : letters.Count > 0 ? string.Join(", ", letters)
+                        : volumes.Count > 0 ? "No drive letter — use Drive → Disk Manager to assign one"
+                        : "No volume — use Drive → Disk Manager to create a partition";
+                    items.Add(new ListViewItem(new[] { "Drive access", access }) { Group = GroupFileSystem });
+                    state += "|" + access;
+                }
+                if (!mnuDrive.DropDownButtonPressed || !info.IsAttached) { this.UpdateDriveMenu(info.AttachedPath, volumes); }
                 var hasPassword = info.HasEmbeddedPassword || companionPresent;
                 mnuAttach.Enabled = !info.IsAttached && hasPassword;
                 mnuDetach.Enabled = !info.IsLocked && hasPassword;
@@ -599,6 +623,7 @@ namespace VhdAttach {
                 if (!info.IsLocked) { items.Add(new ListViewItem(new[] { "Lock", "Use Detach & lock to restore the mount lock" }) { Group = GroupDetails }); }
                 state += "|" + info.AttachedPath + "|" + info.HasEmbeddedPassword;
             } catch (Exception ex) {
+                this.UpdateDriveMenu(null, Array.Empty<Volume>());
                 state = ex.Message;
                 items.Add(new ListViewItem(new[] { "Status", "Unknown — " + ex.Message }) { Group = GroupDetails });
                 items.Add(new ListViewItem(new[] { "Recovery", "Use VsuRecover.exe for a damaged signature or missing password metadata" }) { Group = GroupDetails });
@@ -876,36 +901,29 @@ namespace VhdAttach {
 
 
         private void mnuDrive_DropDownOpening(object sender, EventArgs e) {
-            if (VsuxOperations.IsVsuxPath(this.VhdFileName)) {
-                mnuDrive.Tag = null;
-                mnuDrive.Text = "Drive";
-                mnuDrive.DropDownItems.Clear();
-                mnuDrive.Enabled = false;
-                return;
-            }
-            string newMenuTitle = null;
-
             string attachedDevice = null;
+            var volumes = new List<Volume>();
             try {
-                using (var document = new Medo.IO.VirtualDisk(this.VhdFileName)) {
-                    document.Open(Medo.IO.VirtualDiskAccessMask.GetInfo);
-                    attachedDevice = document.GetAttachedPath();
-                }
+                attachedDevice = this.GetSelectedAttachedPath();
+                if (attachedDevice != null) { volumes.AddRange(Volume.GetVolumesOnPhysicalDrive(attachedDevice)); }
             } catch { }
+            this.UpdateDriveMenu(attachedDevice, volumes);
+        }
+
+        private void UpdateDriveMenu(string attachedDevice, IList<Volume> volumes) {
+            string newMenuTitle = null;
 
             mnuDrive.Tag = null;
             mnuDrive.Text = "Drive";
             mnuDrive.DropDownItems.Clear();
 
             if (attachedDevice != null) {
-                var volumes = new List<Volume>(Volume.GetVolumesOnPhysicalDrive(attachedDevice));
                 var availableVolumes = new List<Volume>();
                 foreach (var volume in volumes) {
                     if (volume.DriveLetter2 != null) {
                         availableVolumes.Add(volume);
                     }
                 }
-
                 if (availableVolumes.Count > 0) {
                     foreach (var volume in availableVolumes) {
                         mnuDrive.DropDownItems.Add(new ToolStripMenuItem("Open " + volume.DriveLetter3, null, mnuDriveOpen_Click) { Tag = volume });
@@ -929,6 +947,10 @@ namespace VhdAttach {
                         }
                     }
                 }
+                if (VsuxOperations.IsVsuxPath(this.VhdFileName)) {
+                    if (mnuDrive.DropDownItems.Count > 0) { mnuDrive.DropDownItems.Add(new ToolStripSeparator()); }
+                    mnuDrive.DropDownItems.Add("Disk Manager…", null, (s, args) => this.OpenDiskManager());
+                }
             }
 
             if (newMenuTitle == null) { newMenuTitle = "Drive"; }
@@ -945,6 +967,8 @@ namespace VhdAttach {
                 } else {
                     mnuDriveLetter_Click(sender, e);
                 }
+            } else if (VsuxOperations.IsVsuxPath(this.VhdFileName) && mnuDrive.Enabled) {
+                this.OpenDiskManager();
             }
         }
 
@@ -961,7 +985,7 @@ namespace VhdAttach {
         }
 
         private void mnuDriveLetter_Click(object sender, EventArgs e) {
-            if (VsuxOperations.IsVsuxPath(this.VhdFileName)) { return; }
+            if (VsuxOperations.IsVsuxPath(this.VhdFileName)) { this.OpenDiskManager(); return; }
             var volume = ((ToolStripDropDownItem)sender).Tag as Volume;
             using (var frm = new ChangeDriveLetterForm(volume)) {
                 if (frm.ShowDialog(this) == DialogResult.OK) {

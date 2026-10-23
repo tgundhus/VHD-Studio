@@ -105,3 +105,7 @@ Read this when you want to know what changed in the documentation and when. Appe
 - Clarified that independent recovery ignores invalid private password records while validating
   generic VHDX structures, and documented conversion's no-overwrite file-handle rename order
   and preservation of the original lock state during legacy upgrades.
+- Documented VSUX drive access and explicit setup in [VSUX.md](VSUX.md), [README.md](../README.md),
+  [the website](../site/index.html) and the 5.2.1 [changelog](../CHANGELOG.md): attached-volume
+  Open controls, Disk Manager selection, and partition/format/letter steps when Explorer has no
+  drive to show. Attach continues to leave initialization and formatting to confirmed actions.

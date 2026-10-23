@@ -1,5 +1,14 @@
 # Changelog
 
+## 5.2.1
+
+### Fixed
+- Attached VSUX images now expose their volumes and **Drive** controls. **Open in Explorer**
+  is available for volumes with a drive letter; setup and letter changes open **Disk Manager**
+  with the attached VSUX disk selected.
+- An attached image without a filesystem volume now shows setup guidance. Attaching a blank
+  disk does not create a partition or format it; these remain explicit Disk Manager actions.
+
 ## 5.2.0
 
 ### New

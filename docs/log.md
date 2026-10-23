@@ -73,3 +73,5 @@ Read this when you want to know what changed in the documentation and when. Appe
   to explain switching packages and the shared-runtime lookup policy.
 - Updated [BUILD.md](../BUILD.md) with the disposable installer regression suite and its guarded
   `installerOnly` CI mode, covering upgrades from 5.1.0, stuck services, runtime switching and uninstall.
+- Updated the build requirements to Inno Setup 7.1 or newer and documented the pinned, verified CI
+  compiler, preventing an older compiler from retaining 5.1.0's previous uninstall callback.

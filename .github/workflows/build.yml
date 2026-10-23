@@ -24,8 +24,23 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Install Inno Setup
-        run: choco install innosetup --no-progress -y
+      - name: Use pinned Inno Setup 7.1.0 (same or newer than the previous release)
+        shell: pwsh
+        run: |
+          $download = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
+          $compilerDirectory = Join-Path $env:RUNNER_TEMP 'InnoSetup-7.1.0'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe' -OutFile $download
+          if ((Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash -ne '0362A383ED217D4C4239B5933866DD96D3EB2102737DA92F80F6057A4B40DF2F') {
+            throw 'The pinned Inno Setup download checksum does not match.'
+          }
+          $signature = Get-AuthenticodeSignature -LiteralPath $download
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false) -ne 'Pyrsys B.V.') {
+            throw 'The Inno Setup download does not have a valid Pyrsys B.V. signature.'
+          }
+          $process = Start-Process -FilePath $download -ArgumentList '/CURRENTUSER', '/PORTABLE=1', '/NOICONS', '/TASKS=""', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $compilerDirectory + '"') -PassThru -WindowStyle Hidden
+          if (-not $process.WaitForExit(120000)) { $process.Kill($true); throw 'Portable Inno Setup extraction timed out.' }
+          if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $compilerDirectory 'ISCC.exe'))) { throw 'Portable Inno Setup extraction failed.' }
+          $compilerDirectory | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Test (including elevated data-safety suite), publish and build installer
         if: ${{ !inputs.installerOnly }}

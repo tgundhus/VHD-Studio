@@ -1,4 +1,9 @@
-; VHD Studio setup (Inno Setup 6). Setup\Publish.ps1 stages production binaries in ..\Publish\VhdStudio.
+; VHD Studio setup (Inno Setup 7.1+). Setup\Publish.ps1 stages production binaries in ..\Publish\VhdStudio.
+
+; Older compilers retain the 5.1.0 uninstaller and its old Pascal cleanup code on upgrade.
+#if VER < EncodeVer(7,1,0)
+  #error Inno Setup 7.1.0 or newer is required to update the installed uninstaller safely.
+#endif
 
 #define AppExe         "VhdStudio.exe"
 #define ServiceExe     "VhdStudioService.exe"

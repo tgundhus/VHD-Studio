@@ -193,7 +193,14 @@ try {
     if (-not $orphan.HasExited) { throw 'The already-stopped service process survived the upgrade.' }
     if ($unrelated.HasExited) { throw 'An unrelated same-name process was killed during orphan cleanup.' }
 
-    Invoke-Bounded (Join-Path $appDirectory 'unins000.exe') @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/LOG=' + (Join-Path $ResultsDirectory 'uninstall.log')))
+    $installedService = Get-Process -Id (Get-ServiceRecord).ProcessId
+    $null = $installedService.Handle
+    $ownedProcesses.Add($installedService)
+    $uninstallLog = Join-Path $ResultsDirectory 'uninstall.log'
+    Invoke-Bounded (Join-Path $appDirectory 'unins000.exe') @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/LOG=' + $uninstallLog))
+    if (-not $installedService.HasExited) { throw 'Uninstall left its service process running.' }
+    if (Test-Path -LiteralPath $servicePath) { throw 'Uninstall left the installed service executable on disk.' }
+    if ((Get-Content -LiteralPath $uninstallLog -Raw) -match 'Failed to delete the file') { throw 'Uninstall failed to delete installed files; inspect its log.' }
     if (Get-Service VhdStudio -ErrorAction SilentlyContinue) { throw 'Uninstall left its service registered.' }
     if ($unrelated.HasExited) { throw 'Uninstall killed an unrelated same-name process.' }
     if ((Get-DiskSnapshot) -ne $disksBefore) { throw 'Disk inventory changed while exercising installers.' }

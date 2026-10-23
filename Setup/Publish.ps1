@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds VHD Studio, optionally signs it, and creates the Inno Setup installer.
+    Builds VHD Studio, optionally signs it, and creates the Inno Setup 7.1+ installer.
 
 .DESCRIPTION
     1. dotnet test (unless -SkipTests)
@@ -104,10 +104,10 @@ if ($SignFile) {
 if (-not $SkipInstaller) {
     $iscc = $InnoCompiler
     if (-not $iscc) {
-        $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe", "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+        $iscc = @("$env:ProgramFiles\Inno Setup 7\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe", "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
     }
     if (-not $iscc) { $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source }
-    if (-not $iscc) { throw 'Inno Setup 6 (ISCC.exe) not found. Install it from https://jrsoftware.org/isinfo.php or run with -SkipInstaller.' }
+    if (-not $iscc) { throw 'Inno Setup 7.1 or newer (ISCC.exe) not found. Supply -InnoCompiler, install it from https://jrsoftware.org/isinfo.php or run with -SkipInstaller.' }
 
     Invoke-Step 'Build installer' {
         New-Item -ItemType Directory -Force $releaseDir | Out-Null

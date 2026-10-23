@@ -4,7 +4,7 @@
 
 * [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). Visual Studio is optional;
   any editor and `dotnet` work.
-* [Inno Setup 6](https://jrsoftware.org/isinfo.php), only needed for the installer.
+* [Inno Setup 7.1 or newer](https://jrsoftware.org/isinfo.php), only needed for the installer.
 * Windows SDK `signtool.exe`, only needed for code signing.
 * The configured `sign-file` command, for the release signing workflow below.
 
@@ -70,6 +70,11 @@ The workflow also runs `Setup\Test-Installer.ps1` on its disposable Windows runn
 and service runtime loading, and uninstalls. The script refuses to run on a development PC.
 For installer-only changes, dispatch the Build workflow with `installerOnly=true` to run these
 checks without repeating the product and disk-safety suites.
+
+CI pins the official Inno Setup 7.1.0 compiler and verifies its download hash and signature.
+Do not downgrade the installer compiler: Inno can retain a newer installed uninstaller and its
+older product script instead of selecting the new service cleanup code. The installer source
+rejects compilers older than 7.1. Use `-InnoCompiler <path-to-ISCC.exe>` for a portable compiler.
 
 
 #### Project layout ####

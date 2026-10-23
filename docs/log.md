@@ -64,3 +64,7 @@ Read this when you want to know what changed in the documentation and when. Appe
   Updated [operations/website.md](operations/website.md) to avoid stale installer-size estimates.
 - Updated the [prototype guide](../Research/VsuPrototype/README.md) to describe its shared production
   core and independent recovery checks rather than the earlier pre-integration state.
+- Updated [VSUX.md](VSUX.md) with successful 5.1.0 installer compilation using the official portable
+  Inno Setup compiler, valid timestamped xGND signatures through `sign-file`, signed uninstallers,
+  the recovery executable's help smoke check and matching uploaded installer hashes. Kept the original
+  80 product tests and 19 VSUX checks identified as the initial integration verification.

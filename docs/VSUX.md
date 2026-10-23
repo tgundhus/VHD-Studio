@@ -94,7 +94,7 @@ byte preservation, companion failure and independent recovery. No existing disk 
 Successful runs clean only their own files; failed runs retain diagnostics. The prototype
 check suite alone does not verify VHD Studio's UI or installer integration.
 
-### Integration verification, 23 October 2026
+### Initial integration verification, 23 October 2026
 
 The complete elevated product suite passed: 80 tests succeeded, no failures, and
 two opt-in diagnostic/benchmark tests were skipped. The new integration tests cover
@@ -106,5 +106,13 @@ All 19 additional VSUX checks passed, including Windows/7-Zip rejection while
 locked, safe NTFS busy-file refusal, payload integrity and the independent published
 recovery executable. The final check found no attached disposable test disks.
 The application, service and self-contained recovery binaries were published to
-`Publish\VhdStudio`. Installer sources were updated, but installer compilation was
-not verified because Inno Setup was unavailable.
+`Publish\VhdStudio`.
+
+### 5.1.0 packaging verification, 23 October 2026
+
+Both the shared-runtime and standalone installers compiled successfully with the official
+portable Inno Setup 7.1.0 compiler. The application, service, VSUX library, recovery tool and
+both installers have valid timestamped Authenticode signatures from xGND (`CN=xGND, O=xGND`),
+applied using `sign-file`. The installers' uninstallers were signed through `sign-file` too.
+The self-contained recovery executable reports version 5.1.0 and its `--help` smoke check passed.
+The uploaded installer hashes matched the local signed files.

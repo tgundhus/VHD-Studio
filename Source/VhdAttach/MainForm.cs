@@ -61,12 +61,17 @@ namespace VhdAttach {
         private ToolStripSplitButton mnuMaintenance;
         private ToolStripButton mnuDiskManager;
         private ToolStripMenuItem mnuProtectVsux;
+        private ToolStripMenuItem mnuVsuxConvert;
+        private ToolStripMenuItem mnuVsuxPortable;
+        private ToolStripMenuItem mnuVsuxBackup;
+        private readonly List<ToolStripItem> StandardMaintenanceItems = new List<ToolStripItem>();
+        private bool VsuxMenuMode;
         private string LastVsuxDisplayState;
 
         private void AddStudioMenu() {
             var size = mnu.ImageScalingSize.Width;
             this.mnuMaintenance = new ToolStripSplitButton("Maintenance", Ui.GetGlyph(Ui.Glyph.Wrench, size, Ui.AccentDark)) { Enabled = false, ToolTipText = "Compact, resize, convert, merge and repair (Alt+T)" };
-            this.mnuMaintenance.ButtonClick += (s, e) => this.OpenMaintenance("Compact");
+            this.mnuMaintenance.ButtonClick += (s, e) => { if (VsuxOperations.IsVsuxPath(this.VhdFileName)) { this.OpenVsuxTools(); } else { this.OpenMaintenance("Compact"); } };
             foreach (var task in MaintenanceForm.TaskNames) {
                 var taskName = task;
                 this.mnuMaintenance.DropDownItems.Add(task == "Differencing" ? "Create differencing disk…" : (task == "Merge" ? "Merge into parent…" : task + "…"), null, (s, e) => this.OpenMaintenance(taskName));
@@ -74,11 +79,34 @@ namespace VhdAttach {
             this.mnuMaintenance.DropDownItems.Add(new ToolStripSeparator());
             this.mnuProtectVsux = new ToolStripMenuItem("Protect as VSUX…", null, (s, e) => this.ProtectVsux()) { Enabled = false };
             this.mnuMaintenance.DropDownItems.Add(this.mnuProtectVsux);
+            foreach (ToolStripItem item in this.mnuMaintenance.DropDownItems) { this.StandardMaintenanceItems.Add(item); }
+            this.mnuVsuxConvert = new ToolStripMenuItem("Convert back to VHDX…", null, (s, e) => this.OpenVsuxTools("Convert")) { Available = false };
+            this.mnuVsuxPortable = new ToolStripMenuItem("Make self-contained…", null, (s, e) => this.OpenVsuxTools("Portable")) { Available = false };
+            this.mnuVsuxBackup = new ToolStripMenuItem("Export recovery information…", null, (s, e) => this.OpenVsuxTools("Backup")) { Available = false };
+            this.mnuMaintenance.DropDownItems.AddRange(new ToolStripItem[] { this.mnuVsuxConvert, this.mnuVsuxPortable, this.mnuVsuxBackup });
             this.mnuDiskManager = new ToolStripButton("Disk Manager", Ui.GetGlyph(Ui.Glyph.Disk, size, Ui.AccentDark), (s, e) => this.OpenDiskManager()) { ToolTipText = "DiskPart-style partition tools (Ctrl+D)" };
             var index = mnu.Items.IndexOf(mnuDrive) + 1;
             mnu.Items.Insert(index, new ToolStripSeparator());
             mnu.Items.Insert(index + 1, this.mnuMaintenance);
             mnu.Items.Insert(index + 2, this.mnuDiskManager);
+        }
+
+        private void SetStudioMode(bool vsux) {
+            if (this.VsuxMenuMode == vsux) { return; }
+            this.VsuxMenuMode = vsux;
+            foreach (var item in this.StandardMaintenanceItems) { item.Available = !vsux; }
+            this.mnuVsuxConvert.Available = this.mnuVsuxPortable.Available = this.mnuVsuxBackup.Available = vsux;
+            this.mnuMaintenance.Text = vsux ? "Soft protection" : "Maintenance";
+            this.mnuMaintenance.ToolTipText = vsux ? "Convert back to VHDX, make self-contained or export recovery information" : "Compact, resize, convert, merge and repair (Alt+T)";
+        }
+
+        private void OpenVsuxTools(string initialAction = null) {
+            if (!VsuxOperations.IsVsuxPath(this.VhdFileName)) { return; }
+            using (var form = new VsuxToolsForm(this.VhdFileName, initialAction)) {
+                form.ShowDialog(this);
+                if (form.ResultFileName != null) { this.OpenFile(form.ResultFileName); return; }
+            }
+            this.UpdateData(this.VhdFileName);
         }
 
         /// <summary>
@@ -285,6 +313,7 @@ namespace VhdAttach {
 
 
         private void UpdateData(string vhdFileName) {
+            this.SetStudioMode(VsuxOperations.IsVsuxPath(vhdFileName));
             if (vhdFileName == null) {
                 list.Items.Clear();
                 list.Groups.Clear();
@@ -528,6 +557,7 @@ namespace VhdAttach {
         }
 
         private void UpdateVsuxData(string path, bool forceRefresh = true) {
+            this.SetStudioMode(true);
             mnuRefresh.Enabled = true;
             mnuAttach.Enabled = false;
             mnuDetach.Enabled = false;
@@ -540,8 +570,9 @@ namespace VhdAttach {
             mnuDrive.Tag = null;
             mnuDrive.Text = "Drive";
             mnuDrive.DropDownItems.Clear();
-            this.mnuMaintenance.Enabled = false;
+            this.mnuMaintenance.Enabled = true;
             this.mnuProtectVsux.Enabled = false;
+            this.mnuVsuxConvert.Enabled = this.mnuVsuxPortable.Enabled = this.mnuVsuxBackup.Enabled = false;
             var file = new FileInfo(path);
             var items = new List<ListViewItem> {
                 new ListViewItem(new[] { "File path", file.DirectoryName }) { Group = GroupFileSystem },
@@ -558,16 +589,20 @@ namespace VhdAttach {
                 items.Add(new ListViewItem(new[] { "File size", Ui.FormatSize(info.Length) }) { Group = GroupFileSystem });
                 items.Add(new ListViewItem(new[] { "Identifier", info.DiskId.ToString() }) { Group = GroupDetails });
                 if (info.IsAttached) { items.Add(new ListViewItem(new[] { "Attached device", info.AttachedPath }) { Group = GroupFileSystem }); }
-                mnuAttach.Enabled = !info.IsAttached && companionPresent;
-                mnuDetach.Enabled = !info.IsLocked && companionPresent;
+                var hasPassword = info.HasEmbeddedPassword || companionPresent;
+                mnuAttach.Enabled = !info.IsAttached && hasPassword;
+                mnuDetach.Enabled = !info.IsLocked && hasPassword;
+                this.mnuVsuxConvert.Enabled = !info.IsAttached && hasPassword;
+                this.mnuVsuxPortable.Enabled = !info.IsAttached && !info.HasEmbeddedPassword && companionPresent;
+                this.mnuVsuxBackup.Enabled = !info.IsAttached;
+                items.Add(new ListViewItem(new[] { "Password information", info.HasEmbeddedPassword ? "Stored inside this file — no JSON companion required" : companionPresent ? "Legacy JSON companion — use Soft protection → Make self-contained" : "Legacy JSON companion missing — use standalone recovery" }) { Group = GroupDetails });
                 if (!info.IsLocked) { items.Add(new ListViewItem(new[] { "Lock", "Use Detach & lock to restore the mount lock" }) { Group = GroupDetails }); }
-                state += "|" + info.AttachedPath;
+                state += "|" + info.AttachedPath + "|" + info.HasEmbeddedPassword;
             } catch (Exception ex) {
                 state = ex.Message;
                 items.Add(new ListViewItem(new[] { "Status", "Unknown — " + ex.Message }) { Group = GroupDetails });
                 items.Add(new ListViewItem(new[] { "Recovery", "Use VsuRecover.exe for a damaged signature or missing password metadata" }) { Group = GroupDetails });
             }
-            items.Add(new ListViewItem(new[] { "Companion file", companionPresent ? Path.GetFileName(path) + ".json" : "Missing — keep the .vsux.json file beside this image" }) { Group = GroupDetails });
             var displayState = path + "|" + state + "|" + companionPresent;
             if (forceRefresh || this.LastVsuxDisplayState != displayState) {
                 list.BeginUpdate();
@@ -623,7 +658,7 @@ namespace VhdAttach {
                     var fileName = frm.FileName;
                     if (VsuxOperations.IsVsuxPath(fileName)) {
                         this.OpenFile(fileName);
-                        Medo.MessageBox.ShowInformation(this, "The new VSUX drive is locked and blank. Click Attach and enter its password, then use Disk Manager to initialize and format the new disk.\n\nKeep the .vsux and .vsux.json files together.");
+                        Medo.MessageBox.ShowInformation(this, "The new VSUX drive is locked and blank. Click Attach and enter its password, then use Disk Manager to initialize and format the new disk.\n\nPassword information stays inside the .vsux file; no JSON companion is required.");
                         return;
                     }
                     try {

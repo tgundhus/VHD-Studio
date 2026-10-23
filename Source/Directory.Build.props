@@ -11,7 +11,7 @@
     <Product>VHD Studio</Product>
     <Company>xGND Software</Company>
     <Copyright>Copyright © 2026 Tobias Gundhus, xGND Software. Based on VHD Attach © 2009-2020 Josip Medved.</Copyright>
-    <Version>5.1.2</Version>
+    <Version>5.2.0</Version>
     <InformationalVersion>$(Version)</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 

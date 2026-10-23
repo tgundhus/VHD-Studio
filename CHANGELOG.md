@@ -1,5 +1,27 @@
 # Changelog
 
+## 5.2.0
+
+### New
+- New and newly protected **VSUX** images are single files. Their per-disk password salt,
+  verifier and derivation parameters are stored in VHDX user metadata through the Windows
+  virtual-disk API; a `.vsux.json` companion is no longer created or needed for normal use.
+- **Soft protection** is available from the toolbar for VSUX images. **Make self-contained…**
+  upgrades an earlier companion-based image after password verification; the old JSON is kept
+  as a backup. Until that explicit upgrade, earlier images still require their companion.
+- **Convert back to VHDX…** verifies the password, removes the embedded VSUX password record
+  and renames a detached image to a new `.vhdx` filename in the same folder without copying the
+  payload. Existing files are refused. **Export recovery information…** writes optional JSON
+  diagnostics; standalone recovery still requires neither JSON nor a password.
+
+### Safety
+- The raw signature writer still changes only bytes 0–7. Initial protection, conversion of the
+  earlier format and conversion back now also update VHDX container metadata through Windows,
+  including its normal header/log bookkeeping. Disk contents remain unencrypted. These actions
+  require a clean, detached image and do not create a full backup.
+- Password Attach, safe **Detach & lock**, busy-file refusal and independent eight-byte recovery
+  remain available. Standard Maintenance and auto-mount stay disabled for protected images.
+
 ## 5.1.2
 
 ### Improved

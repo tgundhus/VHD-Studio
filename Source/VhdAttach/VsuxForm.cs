@@ -25,7 +25,10 @@ namespace VhdAttach {
             if (!string.Equals(operation, "Attach", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(operation, "Lock", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(operation, "Protect", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(operation, "Create", StringComparison.OrdinalIgnoreCase)) {
+                && !string.Equals(operation, "Create", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(operation, "Portable", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(operation, "Convert", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(operation, "Backup", StringComparison.OrdinalIgnoreCase)) {
                 throw new ArgumentException("Unknown VSUX operation.", nameof(operation));
             }
             this.Operation = operation.ToLowerInvariant();
@@ -57,7 +60,11 @@ namespace VhdAttach {
             this.FormClosing += (s, e) => { if (this.IsBusy) { e.Cancel = true; } };
         }
 
-        private string ActionTitle => this.Operation == "create" ? "Create VSUX" : this.Operation == "protect" ? "Protect as VSUX" : this.Operation == "lock" ? "Detach & lock" : this.ReadOnly ? "Attach read-only" : "Attach";
+        private string ActionTitle => this.Operation switch {
+            "create" => "Create VSUX", "protect" => "Protect as VSUX", "lock" => "Detach & lock",
+            "portable" => "Make self-contained", "convert" => "Convert back to VHDX", "backup" => "Export recovery information",
+            _ => this.ReadOnly ? "Attach read-only" : "Attach"
+        };
 
         public static DialogResult RunOperation(IWin32Window owner, string operation, string path, bool readOnly = false, string destination = null, long sizeInBytes = 0, bool fixedSize = false) {
             using (var form = new VsuxForm(operation, path, readOnly, destination, sizeInBytes, fixedSize)) { return form.ShowDialog(owner); }
@@ -69,7 +76,7 @@ namespace VhdAttach {
             try {
                 if (!Ui.IsElevated) {
                     this.StatusLabel.Text = "Waiting for administrator approval and the VSUX operation…";
-                    var arguments = "/Vsux" + (this.Operation == "create" ? "Create" : this.Operation == "lock" ? "Lock" : this.Operation == "protect" ? "Protect" : "Attach") + " " + Ui.Quote(this.FilePath);
+                    var arguments = "/Vsux" + this.Operation + " " + Ui.Quote(this.FilePath);
                     if (this.Destination != null) { arguments += " " + Ui.Quote(this.Destination); }
                     if (this.ReadOnly) { arguments += " /readonly"; }
                     if (this.Operation == "create") {
@@ -82,31 +89,15 @@ namespace VhdAttach {
                         await process.WaitForExitAsync();
                         result = process.ExitCode == 0 ? DialogResult.OK : process.ExitCode == 2 ? DialogResult.Cancel : DialogResult.Abort;
                     }
+                } else if (this.Operation == "backup") {
+                    await this.RunWorkerAsync(null);
+                    result = DialogResult.OK;
                 } else {
-                    using (var password = new VsuxPasswordForm(this.Destination ?? this.FilePath, this.Operation == "protect" || this.Operation == "create", this.ActionTitle)) {
+                    using (var password = new VsuxPasswordForm(this.Operation == "protect" ? this.Destination : this.FilePath, this.Operation == "protect" || this.Operation == "create", this.ActionTitle)) {
                         if (password.ShowDialog(this) == DialogResult.OK) {
                             var secret = password.Password;
-                            this.StatusLabel.Text = this.Operation == "lock" ? "Safely detaching, then locking… Close files on the drive if it is busy."
-                                : this.Operation == "create" ? "Creating the blank disk and applying its mount lock…"
-                                : this.Operation == "protect" ? "Checking the detached image and creating its mount lock…"
-                                : "Checking the password and attaching the drive…";
                             try {
-                                await Task.Run(() => {
-                                    var auditOperation = "VSUX " + this.ActionTitle;
-                                    AuditLog.Started(auditOperation, this.FilePath, this.Destination);
-                                    try {
-                                        switch (this.Operation) {
-                                            case "create": VsuxCreation.Create(this.FilePath, this.SizeInBytes, this.FixedSize, secret); break;
-                                            case "protect": VsuxOperations.Protect(this.FilePath, this.Destination, secret); break;
-                                            case "lock": VsuxOperations.Lock(this.FilePath, secret); break;
-                                            default: VsuxOperations.Attach(this.FilePath, secret, this.ReadOnly); break;
-                                        }
-                                        AuditLog.Succeeded(auditOperation, this.FilePath, this.Destination);
-                                    } catch (Exception error) {
-                                        AuditLog.Failed(auditOperation, this.FilePath, error);
-                                        throw;
-                                    }
-                                });
+                                await this.RunWorkerAsync(secret);
                                 result = DialogResult.OK;
                             } finally { secret = null; }
                         }
@@ -128,6 +119,37 @@ namespace VhdAttach {
                 this.DialogResult = result;
                 this.Close();
             }
+        }
+
+        private async Task RunWorkerAsync(string secret) {
+            this.StatusLabel.Text = this.Operation switch {
+                "lock" => "Safely detaching, then locking… Close files on the drive if it is busy.",
+                "create" => "Creating the blank disk and applying its mount lock…",
+                "protect" => "Checking the detached image and storing its password information…",
+                "portable" => "Checking the password and storing its information inside the detached drive…",
+                "convert" => "Checking the password and converting the detached image back to VHDX…",
+                "backup" => "Exporting optional recovery information…",
+                _ => "Checking the password and attaching the drive…"
+            };
+            await Task.Run(() => {
+                var auditOperation = "VSUX " + this.ActionTitle;
+                AuditLog.Started(auditOperation, this.FilePath, this.Destination);
+                try {
+                    switch (this.Operation) {
+                        case "create": VsuxCreation.Create(this.FilePath, this.SizeInBytes, this.FixedSize, secret); break;
+                        case "protect": VsuxOperations.Protect(this.FilePath, this.Destination, secret); break;
+                        case "lock": VsuxOperations.Lock(this.FilePath, secret); break;
+                        case "portable": VsuxOperations.MakeSelfContained(this.FilePath, secret); break;
+                        case "convert": VsuxOperations.ConvertToVhdx(this.FilePath, this.Destination, secret); break;
+                        case "backup": VsuxOperations.ExportRecoveryBackup(this.FilePath, this.Destination); break;
+                        default: VsuxOperations.Attach(this.FilePath, secret, this.ReadOnly); break;
+                    }
+                    AuditLog.Succeeded(auditOperation, this.FilePath, this.Destination);
+                } catch (Exception error) {
+                    AuditLog.Failed(auditOperation, this.FilePath, error);
+                    throw;
+                }
+            });
         }
     }
 }

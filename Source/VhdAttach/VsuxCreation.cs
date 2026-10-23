@@ -29,7 +29,6 @@ namespace VhdAttach {
                     throw new IOException("VSUX creation did not finish. Keep any remaining files; do not assume the image is locked."
                         + Environment.NewLine + "Temporary VHDX: " + temporary
                         + Environment.NewLine + "Container: " + target
-                        + Environment.NewLine + "Companion: " + target + ".json"
                         + Environment.NewLine + error.Message, error);
                 }
             }
@@ -56,8 +55,8 @@ namespace VhdAttach {
             if ((File.GetAttributes(folder) & (FileAttributes.Compressed | FileAttributes.Encrypted)) != 0) {
                 throw new IOException("Choose an uncompressed, unencrypted folder for the new VSUX image.");
             }
-            if (File.Exists(target) || Directory.Exists(target) || File.Exists(target + ".json") || Directory.Exists(target + ".json")) {
-                throw new IOException("The destination or companion file already exists. Nothing will be overwritten.");
+            if (File.Exists(target) || Directory.Exists(target)) {
+                throw new IOException("The destination already exists. Nothing will be overwritten.");
             }
             return target;
         }

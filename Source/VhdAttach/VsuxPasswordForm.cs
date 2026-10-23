@@ -47,7 +47,7 @@ namespace VhdAttach {
             layout.Controls.Add(showPassword);
             layout.Controls.Add(new Label {
                 Text = create
-                    ? "Use at least 8 characters. Keep the companion .vsux.json file with this drive. This mount lock leaves the data unencrypted."
+                    ? "Use at least 8 characters. The password information stays inside the drive; no JSON companion is required. This mount lock leaves the data unencrypted."
                     : "VSUX uses a mount lock. The disk data remains unencrypted.",
                 AutoSize = true, MaximumSize = new Size(width, 0), Margin = new Padding(0, 0, 0, 12)
             });

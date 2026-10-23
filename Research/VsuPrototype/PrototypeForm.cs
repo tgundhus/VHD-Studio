@@ -38,7 +38,7 @@ internal sealed class PrototypeForm : Form {
         Shown += (_, _) => heading.Font = new Font(Font.FontFamily, 16F * DeviceDpi / 96F, FontStyle.Bold);
         layout.Controls.Add(heading, 0, 0);
         layout.Controls.Add(new Label {
-            Text = "Use disposable VHDX images only. This prototype changes only the eight signature bytes; disk data remains unencrypted. Keep the companion .vsux.json file beside the .vsux file.",
+            Text = "Use disposable VHDX images only. New VSUX stores password information inside VHDX metadata and needs no JSON companion. Protection updates metadata; raw lock/unlock changes only eight signature bytes. Disk data stays unencrypted.",
             AutoSize = true, Dock = DockStyle.Fill, MaximumSize = new Size(1100, 0), Margin = new Padding(0, 0, 0, 16)
         }, 0, 1);
         layout.Controls.Add(new Label { Text = "VSUX &file", AutoSize = true, Margin = Padding.Empty }, 0, 2);
@@ -123,8 +123,8 @@ internal sealed class PrototypeForm : Form {
             MessageBox.Show(this, "Save the VSUX file in the same folder as its source VHDX image.", "Choose the same folder", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        if (File.Exists(target.FileName) || File.Exists(target.FileName + ".json")) {
-            MessageBox.Show(this, "The destination or its companion file already exists. Choose a new name.", "File already exists", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        if (File.Exists(target.FileName) || Directory.Exists(target.FileName)) {
+            MessageBox.Show(this, "The destination already exists. Choose a new name.", "File already exists", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         using var password = new PasswordForm(target.FileName, true);

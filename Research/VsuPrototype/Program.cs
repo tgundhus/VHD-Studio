@@ -19,7 +19,7 @@ internal static class Program {
                 var password = ReadPassword("New password: ");
                 if (password != ReadPassword("Confirm password: ")) { throw new ArgumentException("Passwords do not match."); }
                 PrototypeOperations.Protect(source, target, password);
-                Console.WriteLine("Protected as VSUX. Keep the .vsux and .vsux.json files together. Data is not encrypted.");
+                Console.WriteLine("Protected as a single-file VSUX. Password information is stored in VHDX metadata; no JSON companion is needed. Data is not encrypted.");
                 return 0;
             }
             if (args.Length is 2 or 3 && args[0] is "attach" or "unlock" or "lock") {
@@ -41,8 +41,9 @@ internal static class Program {
                 "VsuPrototype lock <disk.vsux>        Safely detach, then mask the signature\n" +
                 "VsuPrototype unlock <disk.vsux>      Restore signature without mounting\n" +
                 "VsuPrototype status <disk.vsux>\n" +
-                "VsuPrototype --self-test             Disposable structural and password checks\n" +
+                "VsuPrototype --self-test             Disposable legacy-format structural and password checks\n" +
                 "VsuPrototype --self-test-native      Real disposable VHDX attach/detach checks (Administrator)\n" +
+                "Protection updates VHDX metadata; raw lock/unlock and recovery change only eight signature bytes.\n" +
                 "Recovery: use the separate VsuRecover executable.");
             return args is ["--help"] ? 0 : 2;
         } catch (Exception ex) {

@@ -44,16 +44,14 @@ namespace VhdAttachTest {
 
             VhdAttach.VsuxCreation.Create(target, DiskSize, fixedSize, Password);
 
-            CollectionAssert.AreEquivalent(new[] { target, target + ".json" }, Directory.GetFiles(this.Folder), "Creation must leave only the locked container and its companion, without a plaintext scratch image.");
+            CollectionAssert.AreEquivalent(new[] { target }, Directory.GetFiles(this.Folder), "Creation must leave one locked, self-contained file without a companion or plaintext scratch image.");
             var info = VsuxOperations.GetInfo(target);
             Assert.IsTrue(info.IsLocked);
             Assert.IsFalse(info.IsAttached, "Creating a protected disk must not attach it or leave its signature unlocked.");
             Assert.AreNotEqual(Guid.Empty, info.DiskId);
             var imageHash = ScratchDisk.HashFile(target);
-            var companionHash = ScratchDisk.HashFile(target + ".json");
             Assert.ThrowsExactly<UnauthorizedAccessException>(() => VsuxOperations.Unlock(target, "incorrect password"));
             Assert.AreEqual(imageHash, ScratchDisk.HashFile(target));
-            Assert.AreEqual(companionHash, ScratchDisk.HashFile(target + ".json"));
 
             VsuxOperations.Unlock(target, Password);
             // Generic Maintenance excludes VSUX; inspect only this unlocked disposable fixture under its native extension.
@@ -73,11 +71,9 @@ namespace VhdAttachTest {
         }
 
         [TestMethod]
-        [DataRow(false)]
-        [DataRow(true)]
-        public void Test_CreateVsux_ExistingTargetOrCompanionIsNeverChanged(bool companionExists) {
+        public void Test_CreateVsux_ExistingTargetIsNeverChanged() {
             var target = Path.Combine(this.Folder, "existing.vsux");
-            var existing = companionExists ? target + ".json" : target;
+            var existing = target;
             File.WriteAllBytes(existing, RandomNumberGenerator.GetBytes(4096));
             var originalHash = ScratchDisk.HashFile(existing);
 
@@ -85,6 +81,22 @@ namespace VhdAttachTest {
 
             Assert.AreEqual(originalHash, ScratchDisk.HashFile(existing), "A name collision changed the existing file.");
             CollectionAssert.AreEquivalent(new[] { existing }, Directory.GetFiles(this.Folder), "A refused creation left an image or plaintext scratch file behind.");
+        }
+
+        [TestMethod]
+        public void Test_CreateVsux_ExistingUnrelatedJsonIsPreservedAndNotRequired() {
+            this.ProbeNativeCreation();
+            var target = Path.Combine(this.Folder, "new-disk.vsux");
+            var json = target + ".json";
+            File.WriteAllText(json, "unrelated user file");
+            var originalHash = ScratchDisk.HashFile(json);
+
+            VhdAttach.VsuxCreation.Create(target, DiskSize, false, Password);
+            VsuxOperations.Unlock(target, Password);
+
+            Assert.AreEqual(originalHash, ScratchDisk.HashFile(json), "Creating or unlocking an embedded VSUX changed an unrelated JSON file.");
+            Assert.IsTrue(VsuxOperations.GetInfo(target).HasEmbeddedPassword);
+            CollectionAssert.AreEquivalent(new[] { target, json }, Directory.GetFiles(this.Folder));
         }
 
         [TestMethod]
@@ -221,14 +233,14 @@ namespace VhdAttachTest {
             } finally { if (probe != null) { File.Delete(probe); } }
         }
 
-        private static IEnumerable<Control> Descendants(Control parent) {
+        internal static IEnumerable<Control> Descendants(Control parent) {
             foreach (Control child in parent.Controls) {
                 yield return child;
                 foreach (var descendant in Descendants(child)) { yield return descendant; }
             }
         }
 
-        private static void RunSta(Action action) {
+        internal static void RunSta(Action action) {
             Exception failure = null;
             var thread = new Thread(() => {
                 try { action(); }

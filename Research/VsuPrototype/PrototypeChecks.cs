@@ -25,7 +25,7 @@ internal static class PrototypeChecks {
         Directory.CreateDirectory(directory);
         var passed = 0;
         Console.WriteLine($"Disposable check directory: {directory}");
-        Console.WriteLine("Structural fixtures verify guards and byte preservation; they are not mountable native test images.");
+        Console.WriteLine("Structural fixtures verify legacy-companion guards and raw signature byte preservation; they are not mountable native test images.");
 
         void Check(string name, Action<string> check) {
             var path = Path.Combine(directory, name + ".vhdx");
@@ -33,6 +33,25 @@ internal static class PrototypeChecks {
             check(path);
             passed++;
             Console.WriteLine($"PASS {name}");
+        }
+
+        // Test-only construction of the earlier format. These incomplete fixtures cannot
+        // use Windows' VHDX metadata API; native checks below use the public Protect path.
+        void ProtectLegacy(string source, string target, string password) {
+            PasswordDescriptor.CheckNewPassword(password);
+            Assert(string.Equals(Path.GetDirectoryName(Path.GetFullPath(source)), directory, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(Path.GetDirectoryName(Path.GetFullPath(target)), directory, StringComparison.OrdinalIgnoreCase),
+                "Legacy fixture construction escaped this run's disposable directory.");
+            if (File.Exists(target) || Directory.Exists(target) || File.Exists(target + ".json") || Directory.Exists(target + ".json")) {
+                throw new IOException("Legacy fixture destinations must be new.");
+            }
+            using var image = SignatureFile.Open(source, allowRename: true);
+            Assert(!image.IsLocked && image.DiskId == DiskId && image.Length == 2 * 1048576 &&
+                image.Snapshot().AsSpan().SequenceEqual(CreateStructuralFixture().AsSpan(0, SignatureFile.SnapshotSize)),
+                "Legacy construction requires this run's fresh structural fixture.");
+            PasswordDescriptor.Create(image, password).SaveNew(target + ".json");
+            image.MoveTo(target);
+            image.SetLocked(true);
         }
 
         try {
@@ -55,7 +74,7 @@ internal static class PrototypeChecks {
             Check("password-and-portability", path => {
                 var original = File.ReadAllBytes(path);
                 var container = Path.ChangeExtension(path, ".vsux");
-                PrototypeOperations.Protect(path, container, Password);
+                ProtectLegacy(path, container, Password);
                 Assert(!File.Exists(path) && File.Exists(container + ".json"), "Protect did not create the portable container pair.");
                 var info = PrototypeOperations.GetInfo(container);
                 Assert(info.IsLocked && !info.IsAttached && info.AttachedPath == null && info.DiskId == DiskId && info.Length == original.Length,
@@ -79,7 +98,7 @@ internal static class PrototypeChecks {
             Check("missing-sidecar-recovery", path => {
                 var original = File.ReadAllBytes(path);
                 var container = Path.ChangeExtension(path, ".vsux");
-                PrototypeOperations.Protect(path, container, Password);
+                ProtectLegacy(path, container, Password);
                 File.Delete(container + ".json");
                 var locked = File.ReadAllBytes(container);
                 ExpectRefusal(() => PrototypeOperations.Unlock(container, Password));
@@ -91,7 +110,7 @@ internal static class PrototypeChecks {
             Check("tampered-sidecar-recovery", path => {
                 var original = File.ReadAllBytes(path);
                 var container = Path.ChangeExtension(path, ".vsux");
-                PrototypeOperations.Protect(path, container, Password);
+                ProtectLegacy(path, container, Password);
                 File.WriteAllText(container + ".json", "{\"Version\":999}");
                 var locked = File.ReadAllBytes(container);
                 ExpectRefusal(() => PrototypeOperations.Unlock(container, Password));
@@ -103,7 +122,7 @@ internal static class PrototypeChecks {
             Check("wrong-disk-sidecar", path => {
                 var original = File.ReadAllBytes(path);
                 var container = Path.ChangeExtension(path, ".vsux");
-                PrototypeOperations.Protect(path, container, Password);
+                ProtectLegacy(path, container, Password);
                 var sidecar = JsonNode.Parse(File.ReadAllText(container + ".json"))!;
                 sidecar["diskId"] = Guid.NewGuid().ToString();
                 File.WriteAllText(container + ".json", sidecar.ToJsonString());
@@ -117,7 +136,7 @@ internal static class PrototypeChecks {
             Check("corrupt-recovery-snapshot", path => {
                 var original = File.ReadAllBytes(path);
                 var container = Path.ChangeExtension(path, ".vsux");
-                PrototypeOperations.Protect(path, container, Password);
+                ProtectLegacy(path, container, Password);
                 var sidecar = JsonNode.Parse(File.ReadAllText(container + ".json"))!;
                 var snapshot = Convert.FromBase64String(sidecar["headerSnapshot"]!.GetValue<string>());
                 snapshot[^1] ^= 1;
@@ -147,7 +166,7 @@ internal static class PrototypeChecks {
                 using (var busy = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None)) {
                     ExpectRefusal(() => { using var disk = SignatureFile.Open(path); });
                     ExpectRefusal(() => SignatureFile.Restore(path));
-                    ExpectRefusal(() => PrototypeOperations.Protect(path, Path.ChangeExtension(path, ".vsux"), Password));
+                    ExpectRefusal(() => ProtectLegacy(path, Path.ChangeExtension(path, ".vsux"), Password));
                 }
                 AssertSameHash(original, File.ReadAllBytes(path), "An in-use refusal changed image bytes.");
             });
@@ -157,7 +176,7 @@ internal static class PrototypeChecks {
                 var container = Path.ChangeExtension(path, ".vsux");
                 byte[] existing = [0x12, 0x34, 0x56];
                 File.WriteAllBytes(container, existing);
-                ExpectRefusal(() => PrototypeOperations.Protect(path, container, Password));
+                ExpectRefusal(() => ProtectLegacy(path, container, Password));
                 AssertSameHash(original, File.ReadAllBytes(path), "Overwrite refusal changed source image.");
                 AssertSameHash(existing, File.ReadAllBytes(container), "Protect overwrote an existing container.");
             });
@@ -167,7 +186,7 @@ internal static class PrototypeChecks {
                 var container = Path.ChangeExtension(path, ".vsux");
                 byte[] existing = [0x12, 0x34, 0x56];
                 File.WriteAllBytes(container + ".json", existing);
-                ExpectRefusal(() => PrototypeOperations.Protect(path, container, Password));
+                ExpectRefusal(() => ProtectLegacy(path, container, Password));
                 AssertSameHash(original, File.ReadAllBytes(path), "Sidecar overwrite refusal changed source image.");
                 AssertSameHash(existing, File.ReadAllBytes(container + ".json"), "Protect overwrote an existing sidecar.");
             });
@@ -222,7 +241,7 @@ internal static class PrototypeChecks {
                 Check("independent-recovery-executable", path => {
                     var original = File.ReadAllBytes(path);
                     var container = Path.ChangeExtension(path, ".vsux");
-                    PrototypeOperations.Protect(path, container, Password);
+                    ProtectLegacy(path, container, Password);
                     File.Delete(container + ".json");
                     var result = RunTool(recoveryExe, ["--restore", container], directory);
                     Assert(result.ExitCode == 0, "Standalone recovery failed: " + result.Error + result.Output);
@@ -257,7 +276,6 @@ internal static class PrototypeChecks {
         Exception? failure = null;
         try {
             NativeDisk.CreateDisposable(image);
-            var original = File.ReadAllBytes(image);
             const string sevenZip = @"C:\Program Files\7-Zip\7z.exe";
             if (File.Exists(sevenZip)) {
                 var normalReader = RunTool(sevenZip, ["l", "-tVHDX", "--", image]);
@@ -265,7 +283,13 @@ internal static class PrototypeChecks {
             }
             PrototypeOperations.Protect(image, container, Password);
             var locked = File.ReadAllBytes(container);
-            AssertOnlySignatureChanged(original, locked);
+            Assert(!File.Exists(image) && !File.Exists(container + ".json") &&
+                PrototypeOperations.GetInfo(container) is { IsLocked: true, HasEmbeddedPassword: true },
+                "Native protection did not create a locked single-file VSUX.");
+            // Initial protection legitimately changes VHDX user metadata and header/log
+            // bookkeeping. Subsequent raw signature and read-only tests use that baseline.
+            var unmasked = (byte[])locked.Clone();
+            "vhdxfile"u8.CopyTo(unmasked);
             if (File.Exists(sevenZip)) {
                 var lockedReader = RunTool(sevenZip, ["l", "-tVHDX", "--", container]);
                 Assert(lockedReader.ExitCode != 0, "7-Zip unexpectedly opened the masked disposable VHDX.");
@@ -286,9 +310,9 @@ internal static class PrototypeChecks {
             PrototypeOperations.Lock(container, Password);
             using (var disk = SignatureFile.Open(container)) { Assert(disk.IsLocked, "Safe detach did not re-lock the image."); }
             Assert(PrototypeOperations.GetInfo(container) is { IsLocked: true, IsAttached: false, AttachedPath: null }, "Detach did not update container information.");
-            AssertOnlySignatureChanged(original, File.ReadAllBytes(container));
+            AssertSameHash(locked, File.ReadAllBytes(container), "Native read-only attach/detach changed the protected image.");
             SignatureFile.Restore(container);
-            AssertSameHash(original, File.ReadAllBytes(container), "Native read-only attach/detach/recovery changed bytes outside the signature.");
+            AssertSameHash(unmasked, File.ReadAllBytes(container), "Native read-only attach/detach/recovery changed bytes outside the signature.");
         } catch (Exception error) {
             failure = error;
             throw;
@@ -313,9 +337,9 @@ internal static class PrototypeChecks {
                 file.Flush(flushToDisk: true);
             }
             NativeDisk.Detach(image);
-            var beforeProtection = File.ReadAllBytes(image);
             PrototypeOperations.Protect(image, container, Password);
-            AssertOnlySignatureChanged(beforeProtection, File.ReadAllBytes(container));
+            Assert(!File.Exists(container + ".json") && PrototypeOperations.GetInfo(container) is { IsLocked: true, HasEmbeddedPassword: true },
+                "Payload protection did not create a locked single-file VSUX.");
 
             PrototypeOperations.Attach(container, Password);
             using (var busy = new FileStream(payloadPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {

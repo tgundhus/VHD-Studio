@@ -53,6 +53,28 @@ internal static class NativeDisk {
 
     public static bool IsAttached(string path) => GetAttachedPath(path) != null;
 
+    // Only the Windows VHDX provider writes user metadata. The caller verifies
+    // the password and holds a file-identity guard before opening this handle.
+    public static void SetPasswordMetadata(string path, byte[] record) {
+        using var disk = OpenMetadata(path);
+        if (GetAttachedPath(disk) != null) { throw new IOException("Detach the disk before changing VSUX metadata."); }
+        var id = SignatureFile.PasswordMetadataId;
+        CheckCode(Native.SetVirtualDiskMetadata(disk, ref id, (uint)record.Length, record), "Store the VSUX password record");
+        uint size = 4096;
+        var readBack = new byte[size];
+        CheckCode(Native.GetVirtualDiskMetadata(disk, ref id, ref size, readBack), "Read back the VSUX password record");
+        if (size != record.Length || !record.AsSpan().SequenceEqual(readBack.AsSpan(0, (int)size))) { throw new IOException("The embedded VSUX password record failed read-back verification."); }
+        if (GetAttachedPath(disk) != null) { throw new IOException("The disk became attached during the operation. Its signature was not masked."); }
+    }
+
+    public static void DeletePasswordMetadata(string path) {
+        using var disk = OpenMetadata(path);
+        if (GetAttachedPath(disk) != null) { throw new IOException("Detach the disk before removing VSUX metadata."); }
+        var id = SignatureFile.PasswordMetadataId;
+        CheckCode(Native.DeleteVirtualDiskMetadata(disk, ref id), "Remove the VSUX password record");
+        if (GetAttachedPath(disk) != null) { throw new IOException("The disk became attached during conversion."); }
+    }
+
     public static void EnsureDetached(string path) {
         if (IsAttached(path)) {
             throw new IOException("The disk is attached. Safely detach it before changing its signature.");
@@ -142,6 +164,16 @@ internal static class NativeDisk {
         // Explicit VHDX provider is required when the filename has the .vsux suffix.
         var status = Native.OpenVirtualDisk(ref storage, Path.GetFullPath(path), access, 0, ref parameters, out var handle);
         if (status != 0) { handle?.Dispose(); CheckCode(status, "Open the VHDX with Windows"); }
+        return handle!;
+    }
+
+    private static SafeFileHandle OpenMetadata(string path) {
+        var storage = VhdxStorage();
+        var parameters = new OpenMetadataParameters { Version = 2 };
+        // Version 2 takes access NONE; ReadOnly=false opens the backing store for
+        // writing without attaching or initializing the virtual disk.
+        var status = Native.OpenVirtualDiskMetadata(ref storage, Path.GetFullPath(path), 0, 0, ref parameters, out var handle);
+        if (status != 0) { handle?.Dispose(); CheckCode(status, "Open the VHDX metadata with Windows"); }
         return handle!;
     }
 
@@ -275,6 +307,8 @@ internal static class NativeDisk {
     [StructLayout(LayoutKind.Sequential)]
     private struct OpenParameters { public uint Version; public uint RWDepth; }
     [StructLayout(LayoutKind.Sequential)]
+    private struct OpenMetadataParameters { public uint Version; public int GetInfoOnly; public int ReadOnly; public Guid ResiliencyGuid; }
+    [StructLayout(LayoutKind.Sequential)]
     private struct AttachParameters { public uint Version; public ulong Reserved; }
     // The native union has 8-byte alignment. Nest it so UniqueId starts at offset 8,
     // rather than offset 4 (flattening the fields silently shifts every parameter).
@@ -300,6 +334,14 @@ internal static class NativeDisk {
         internal static extern int CreateVirtualDisk(ref VirtualStorageType type, string path, uint access, IntPtr security, uint flags, uint providerFlags, ref CreateParameters parameters, IntPtr overlapped, out SafeFileHandle handle);
         [DllImport("virtdisk.dll", CharSet = CharSet.Unicode)]
         internal static extern int OpenVirtualDisk(ref VirtualStorageType type, string path, uint access, uint flags, ref OpenParameters parameters, out SafeFileHandle handle);
+        [DllImport("virtdisk.dll", EntryPoint = "OpenVirtualDisk", CharSet = CharSet.Unicode)]
+        internal static extern int OpenVirtualDiskMetadata(ref VirtualStorageType type, string path, uint access, uint flags, ref OpenMetadataParameters parameters, out SafeFileHandle handle);
+        [DllImport("virtdisk.dll")]
+        internal static extern int SetVirtualDiskMetadata(SafeFileHandle disk, ref Guid item, uint size, byte[] data);
+        [DllImport("virtdisk.dll")]
+        internal static extern int GetVirtualDiskMetadata(SafeFileHandle disk, ref Guid item, ref uint size, [Out] byte[] data);
+        [DllImport("virtdisk.dll")]
+        internal static extern int DeleteVirtualDiskMetadata(SafeFileHandle disk, ref Guid item);
         [DllImport("virtdisk.dll", CharSet = CharSet.Unicode)]
         internal static extern int GetVirtualDiskPhysicalPath(SafeFileHandle disk, ref uint size, StringBuilder path);
         [DllImport("virtdisk.dll")]

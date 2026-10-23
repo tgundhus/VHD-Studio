@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -33,6 +34,51 @@ internal sealed class PasswordDescriptor {
         };
     }
 
+    public static PasswordDescriptor CreateEmbedded(SignatureFile image, string password) {
+        CheckNewPassword(password);
+        var salt = RandomNumberGenerator.GetBytes(32);
+        return new PasswordDescriptor {
+            Format = "VSUX-embedded-2", DiskId = image.DiskId, Iterations = WorkFactor,
+            Salt = salt, PasswordHash = Derive(password, salt, WorkFactor),
+            HeaderSnapshot = [], SnapshotSha256 = []
+        };
+    }
+
+    // Fixed-size and independently checksummed. No JSON, saved header or payload
+    // needs to be trusted or parsed before the password can be checked.
+    public byte[] ToEmbeddedRecord() {
+        var bytes = new byte[128];
+        "VSUXPWD2"u8.CopyTo(bytes);
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), 2);
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(12), Iterations);
+        DiskId.TryWriteBytes(bytes.AsSpan(16, 16));
+        Salt.CopyTo(bytes, 32);
+        PasswordHash.CopyTo(bytes, 64);
+        SHA256.HashData(bytes.AsSpan(0, 96)).CopyTo(bytes, 96);
+        return bytes;
+    }
+
+    public static PasswordDescriptor FromEmbeddedRecord(byte[] bytes) {
+        if (bytes.Length != 128 || !bytes.AsSpan(0, 8).SequenceEqual("VSUXPWD2"u8) ||
+            BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(8)) != 2 ||
+            BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(12)) != WorkFactor ||
+            new Guid(bytes.AsSpan(16, 16)) == Guid.Empty ||
+            !CryptographicOperations.FixedTimeEquals(SHA256.HashData(bytes.AsSpan(0, 96)), bytes.AsSpan(96, 32))) {
+            throw new InvalidDataException("The embedded VSUX password record is invalid. No legacy companion will be used instead. Standalone recovery remains available.");
+        }
+        return new PasswordDescriptor {
+            Format = "VSUX-embedded-2", DiskId = new Guid(bytes.AsSpan(16, 16)), Iterations = WorkFactor,
+            Salt = bytes.AsSpan(32, 32).ToArray(), PasswordHash = bytes.AsSpan(64, 32).ToArray(),
+            HeaderSnapshot = [], SnapshotSha256 = []
+        };
+    }
+
+    public static PasswordDescriptor ForImage(SignatureFile image, string containerPath) {
+        var descriptor = image.EmbeddedPasswordRecord is { } embedded ? FromEmbeddedRecord(embedded) : Load(containerPath + ".json");
+        descriptor.Match(image);
+        return descriptor;
+    }
+
     public static void CheckNewPassword(string password) {
         if (password.Length < 8 || password.Length > 1024) { throw new ArgumentException("Use a password between 8 and 1024 characters."); }
     }
@@ -46,7 +92,7 @@ internal sealed class PasswordDescriptor {
     }
 
     public void Match(SignatureFile image) {
-        if (image.DiskId != DiskId) { throw new InvalidDataException("The password companion file belongs to a different virtual disk."); }
+        if (image.DiskId != DiskId) { throw new InvalidDataException("The VSUX password information belongs to a different virtual disk."); }
     }
 
     public void SaveNew(string path) {

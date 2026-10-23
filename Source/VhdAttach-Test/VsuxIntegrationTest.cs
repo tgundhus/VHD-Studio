@@ -52,34 +52,30 @@ namespace VhdAttachTest {
         }
 
         [TestMethod]
-        public void Test_PublicCore_PasswordRoundTripChangesOnlySignature() {
+        public void Test_PublicCore_EmbeddedUnlockChangesOnlySignature() {
             var image = this.CreateDisposableImage();
-            var original = File.ReadAllBytes(image);
-            var originalHash = Hash(original);
             var container = Path.ChangeExtension(image, ".vsux");
 
             VsuxOperations.Protect(image, container, Password);
             Assert.IsFalse(File.Exists(image));
-            Assert.IsTrue(File.Exists(container + ".json"));
+            Assert.IsFalse(File.Exists(container + ".json"), "New VSUX protection must be self-contained.");
             var locked = File.ReadAllBytes(container);
-            Assert.AreEqual(original.Length, locked.Length);
             Assert.IsTrue(locked.AsSpan(0, 8).SequenceEqual("vsuxlock"u8));
-            Assert.IsTrue(original.AsSpan(8).SequenceEqual(locked.AsSpan(8)), "Protect changed bytes outside the eight-byte signature.");
             var info = VsuxOperations.GetInfo(container);
             Assert.IsTrue(info.IsLocked);
             Assert.IsFalse(info.IsAttached);
             Assert.IsNull(info.AttachedPath);
             Assert.AreNotEqual(Guid.Empty, info.DiskId);
-            Assert.AreEqual((long)original.Length, info.Length);
+            Assert.AreEqual((long)locked.Length, info.Length);
 
             var lockedHash = Hash(locked);
-            var companionHash = Hash(File.ReadAllBytes(container + ".json"));
             Assert.ThrowsExactly<UnauthorizedAccessException>(() => VsuxOperations.Unlock(container, "incorrect password"));
             Assert.AreEqual(lockedHash, Hash(File.ReadAllBytes(container)), "A wrong password changed the image.");
-            Assert.AreEqual(companionHash, Hash(File.ReadAllBytes(container + ".json")), "A wrong password changed the companion file.");
 
             VsuxOperations.Unlock(container, Password);
-            Assert.AreEqual(originalHash, Hash(File.ReadAllBytes(container)), "The complete image did not survive the signature round trip.");
+            var restored = File.ReadAllBytes(container);
+            Assert.IsTrue(restored.AsSpan(0, 8).SequenceEqual("vhdxfile"u8));
+            Assert.IsTrue(locked.AsSpan(8).SequenceEqual(restored.AsSpan(8)), "Unlock changed bytes outside the eight-byte signature.");
             var unlocked = VsuxOperations.GetInfo(container);
             Assert.IsFalse(unlocked.IsLocked);
             Assert.IsFalse(unlocked.IsAttached);
@@ -190,7 +186,12 @@ namespace VhdAttachTest {
             Assert.IsTrue(Command(form, "mnuAttach").Enabled, "Attach must remain available for the password prompt.");
             Assert.AreEqual(canLock, Command(form, "mnuDetach").Enabled, "Only an unlocked VSUX image can be detached and locked.");
             Assert.AreEqual("Detach && lock", Command(form, "mnuDetach").Text);
-            foreach (var name in new[] { "mnuMaintenance", "mnuAutomount", "mnuDrive", "mnuProtectVsux" }) {
+            Assert.IsTrue(Command(form, "mnuMaintenance").Enabled, "VSUX needs its dedicated soft-protection tools.");
+            Assert.AreEqual("Soft protection", Command(form, "mnuMaintenance").Text);
+            Assert.IsTrue(Command(form, "mnuVsuxConvert").Enabled);
+            Assert.IsTrue(Command(form, "mnuVsuxBackup").Enabled);
+            Assert.IsFalse(Command(form, "mnuVsuxPortable").Enabled, "An embedded VSUX file needs no companion migration.");
+            foreach (var name in new[] { "mnuAutomount", "mnuDrive", "mnuProtectVsux" }) {
                 Assert.IsFalse(Command(form, name).Enabled, name + " must remain unavailable for VSUX images.");
             }
         }

@@ -104,7 +104,7 @@
       "name": "Does VSUX encrypt my disk?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. VSUX is an experimental mount lock that changes only the eight VHDX signature bytes and prompts for a password in VHD Studio. The data stays unencrypted, and specialists or the supplied recovery tool can bypass the lock. Keep the .vsux.json companion beside the image and a full backup; an interrupted session can leave it unlocked. VSUX attach and detach-and-lock require administrator approval."
+        "text": "No. VSUX is an experimental password-gated mount lock; the disk data stays unencrypted and specialists or the supplied recovery tool can bypass it. New images store password information inside the file and need no JSON companion. Earlier images need their companion until upgraded with Make self-contained. Initial protection, upgrades and conversion back update VHDX metadata; the raw signature writer changes only eight bytes. Keep a full backup; an interrupted session can leave it unlocked. VSUX operations require administrator approval."
       }
     }
   ]
@@ -346,10 +346,11 @@ footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
       </article>
       <article class="card">
         <h3><span class="n">07</span>VSUX password prompt (experimental)</h3>
-        <p>Choose New → VSUX (soft protected drive) to create a blank locked image and set its password. Click Attach, enter the password, then use Disk Manager to initialize and format the new blank disk. For an existing detached standalone VHDX, open Maintenance → Soft protection → Protect as VSUX…; it renames the image in the same folder without copying its payload.</p>
-        <p>Detach &amp; lock flushes, locks and dismounts its volumes first; open files stop it. VSUX operations request administrator approval. VSUX has no auto-mount or Maintenance.</p>
-        <p>The data stays unencrypted. Only eight signature bytes change, blocking ordinary mounting while locked, including on another PC. Specialists can bypass the lock. Keep the .vsux.json companion beside the image; an interrupted session can leave it unlocked, and power loss during a signature write carries risk.</p>
-        <p>Both installers include the independent, self-contained VsuRecover.exe. It validates a detached image and restores only the eight signature bytes without a password or companion file. <a href="https://github.com/tgundhus/VHD-Studio/blob/master/docs/VSUX.md">Read the usage and recovery guide</a>.</p>
+        <p>Choose New → VSUX (soft protected drive) to create a blank locked image and set its password. Click Attach, enter the password, then use Disk Manager to initialize and format the new blank disk. For an existing detached standalone VHDX, open Maintenance → Soft protection → Protect as VSUX…; it renames the image in the same folder without copying its payload. Password information stays inside the new VSUX file; no JSON companion is needed, including on another PC.</p>
+        <p>For a VSUX image, the toolbar's Soft protection button offers Convert back to VHDX…, Make self-contained… for earlier images, and Export recovery information…. Conversion verifies the password, removes its VSUX password metadata and renames the detached file in the same folder without copying the payload or replacing existing files. Earlier images still need their .vsux.json companion until explicitly upgraded; the old JSON is kept as a backup.</p>
+        <p>Detach &amp; lock flushes, locks and dismounts its volumes first; open files stop it. VSUX operations request administrator approval. Auto-mount and ordinary Maintenance operations remain unavailable for VSUX.</p>
+        <p>The data stays unencrypted. The eight-byte signature lock blocks ordinary mounting while locked, including on another PC; specialists can bypass it. Initial protection, legacy upgrades and conversion back also update VHDX container metadata through Windows. An interrupted session can leave it unlocked, and power loss during a write carries risk. Keep a full backup before changing an existing image.</p>
+        <p>Both installers include the independent, self-contained VsuRecover.exe. It validates a detached image and restores only the eight signature bytes without a password or companion file. Recovery-information JSON is optional diagnostics, not a full backup. <a href="https://github.com/tgundhus/VHD-Studio/blob/master/docs/VSUX.md">Read the usage and recovery guide</a>.</p>
       </article>
     </div>
   </div>
@@ -363,7 +364,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
     <div class="figs">
       <figure>
         <div class="shot"><img src="images/maintenance.png" width="886" height="613" loading="lazy" alt="Maintenance window with options to compact, resize, convert, create a differencing disk, merge and repair a VHDX"></div>
-        <figcaption><b>Maintenance.</b> Compact, resize, convert, merge, repair and inspect a disk. Changes to disk contents or metadata offer a verified backup first. VSUX soft protection keeps recovery diagnostics; keep a full backup separately.</figcaption>
+        <figcaption><b>Maintenance.</b> Compact, resize, convert, merge, repair and inspect a disk. Changes to disk contents or metadata offer a verified backup first. VSUX soft protection and conversion back do not make a full backup; keep one separately.</figcaption>
       </figure>
       <figure>
         <div class="shot"><img src="images/disk-manager.png" width="986" height="633" loading="lazy" alt="Disk Manager listing disks, partitions and volumes, with virtual disks highlighted next to their backing files"></div>
@@ -381,7 +382,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
       <p><a href="https://github.com/tgundhus/VHD-Studio/blob/master/docs/SAFETY.md">Read the full data-safety model</a></p>
     </div>
     <ul class="checks">
-      <li>A verified backup before in-place Maintenance changes: the checksum is re-read from disk, and Windows must be able to open the backup as a virtual disk. VSUX retains recovery diagnostics, not a full backup.</li>
+      <li>A verified backup before in-place Maintenance changes: the checksum is re-read from disk, and Windows must be able to open the backup as a virtual disk. VSUX actions do not make a full backup; optional recovery diagnostics are not a backup.</li>
       <li>Disks that are attached, in use, or changed since you selected them are refused, not guessed at.</li>
       <li>New disks, conversions and backups never replace an existing file.</li>
       <li>System, boot, page-file and image-hosting disks are protected.</li>
@@ -488,7 +489,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
       </div>
       <div>
         <h3>Does VSUX encrypt my disk?</h3>
-        <p>No. VSUX is an experimental mount lock that changes only the eight VHDX signature bytes and prompts for a password in VHD Studio. The data stays unencrypted, and specialists or the supplied recovery tool can bypass the lock. Keep the .vsux.json companion beside the image and a full backup; an interrupted session can leave it unlocked. VSUX attach and detach-and-lock require administrator approval.</p>
+        <p>No. VSUX is an experimental password-gated mount lock; the disk data stays unencrypted and specialists or the supplied recovery tool can bypass it. New images store password information inside the file and need no JSON companion. Earlier images need their companion until upgraded with Make self-contained. Initial protection, upgrades and conversion back update VHDX metadata; the raw signature writer changes only eight bytes. Keep a full backup; an interrupted session can leave it unlocked. VSUX operations require administrator approval.</p>
       </div>
     </div>
   </div>

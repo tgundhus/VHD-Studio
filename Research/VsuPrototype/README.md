@@ -12,17 +12,24 @@ locked. Unlock restores ASCII `vhdxfile`. No other image bytes are written by th
 prototype's raw writer. Windows performs ordinary virtual-disk and filesystem I/O
 while the disk is mounted; a read/write session can naturally change other bytes.
 
-`disk.vsux.json` contains a random salt, a PBKDF2-HMAC-SHA256 password verifier
-(600,000 iterations), the stable VHDX disk identifier, and a SHA256-checked snapshot
-of the original first 1 MiB. The companion is committed, flushed and re-read before
-the first signature change. **Copy both files together** when moving to another PC.
-The snapshot is diagnostic information: no command restores it over current disk
-metadata. It is not a full disk backup.
+New protection creates a single `.vsux` file. A per-image random salt, PBKDF2-HMAC-SHA256
+password verifier (600,000 iterations) and derivation parameters are stored in VHDX
+user metadata through Windows; no JSON companion is created or required. Initial
+protection changes container metadata and normal header/log bookkeeping beyond the
+eight-byte raw signature boundary. Disk payload contents remain unencrypted.
+
+Earlier images still require their `disk.vsux.json` companion for password operations.
+It also contains the stable disk identifier and a SHA256-checked snapshot of the
+original first 1 MiB. Keep both files together until explicitly upgrading through
+VHD Studio's **Soft protection → Make self-contained…**. The old JSON is retained
+as a backup. Snapshots and optional recovery-information exports are diagnostic
+information: no command restores them over current metadata. They are not full backups.
 
 The password gates this application. This is mount prevention, **not encryption**:
 the payload stays readable to someone who restores the published VHDX signature or
-uses tools that ignore it. Modifying the identifier violates the normal VHDX format
-writing rules. An eight-byte write is not guaranteed atomic during power loss.
+uses tools that ignore it. Masking the file signature violates the normal VHDX format
+writing rules. An eight-byte write is not guaranteed atomic during power loss, and
+metadata updates can also be interrupted. Use only disposable images in this harness.
 
 ## Build and run
 
@@ -36,8 +43,8 @@ Research\VsuPrototype\bin\Debug\net10.0-windows\VsuPrototype.exe
 
 The prototype executable requests Windows administrator approval on startup so
 **Attach** and **Detach and lock** can work directly. The separate recovery tool
-does not require elevation beyond the file's access permissions. Detached-file CLI
-operations can also run without elevation using `dotnet VsuPrototype.dll`.
+does not require elevation beyond the file's access permissions. CLI operations can
+also be invoked using `dotnet VsuPrototype.dll`.
 The program does not install a service, register file associations, or change VHD Studio.
 
 1. Create a disposable VHDX. It must be detached, local, uncompressed, unencrypted,
@@ -50,8 +57,9 @@ The program does not install a service, register file associations, or change VH
 
 Closing the app does not detach or lock. An app crash while attached or after
 unlock leaves the ordinary VHDX signature available. After any failed operation,
-check the displayed state; never assume the image is locked. If protection fails
-after renaming, retain the `.vsux` and `.json` files for recovery.
+check the displayed state; never assume the image is locked. If protection fails,
+retain any original `.vhdx`, renamed `.vsux` and existing legacy JSON for diagnosis
+and recovery. Do not assume a failed action rolled back its metadata changes.
 
 ## Standalone recovery
 
@@ -65,6 +73,9 @@ requires exclusive access, restores **only eight bytes**, flushes and verifies t
 and leaves the filename unchanged. Rename `.vsux` to `.vhdx` to stop using the lock.
 It also accepts partially damaged signature bytes. Pending logs, differencing
 disks and invalid metadata are refused for manual diagnosis.
+Embedded password metadata remains because recovery deliberately changes only the
+signature. VHD Studio's password-based **Convert back to VHDX…** action also removes
+its own metadata item before renaming the file.
 
 ## Verification
 
@@ -74,14 +85,18 @@ dotnet Research\VsuPrototype\bin\Debug\net10.0-windows\VsuPrototype.dll --self-t
 powershell -NoProfile -File Research\VsuPrototype\Run-NativeChecks.ps1
 ```
 
-The first suite uses structural fixtures and tests byte preservation, password
-failure, portability, malformed/missing companion files, partial-write recovery,
-invalid images and exclusive-access/no-overwrite guards. It does not claim those
-fixtures can be mounted.
+The first suite constructs the earlier companion-based format with a local test-only
+helper restricted to its freshly created synthetic fixtures. It tests byte preservation,
+password failure, portability, malformed/missing companion files, partial-write recovery,
+invalid images and exclusive-access/no-overwrite guards. It does not claim those fixtures
+can be mounted or use Windows' native user-metadata API.
 
 The native suite creates its own uniquely named temporary VHDX images and fails if
-Windows cannot create or mount them. It checks masked-image rejection, password
-attach, safe detach, recovery, payload preservation and busy-file refusal. Only a
+Windows cannot create or mount them. It uses the current public protection API,
+verifies embedded credentials without a JSON companion, and checks masked-image
+rejection, password attach, safe detach, recovery, payload preservation and busy-file
+refusal. Byte preservation is compared against the image after initial metadata creation;
+raw signature changes and read-only mounting must preserve the other bytes. Only a
 disk identified as this run's freshly created, 64 MiB, file-backed image may be
 partitioned or formatted. No existing disk is selected. Failed runs retain their
 disposable artifacts for diagnosis; successful runs remove only their own files.
@@ -102,6 +117,9 @@ This harness does not install or configure VHD Studio. Auto-mount, automatic loc
 on exit, differencing disks, network paths and custom filesystem drivers remain excluded.
 
 ## Original prototype verification, 23 October 2026
+
+These initial results describe the earlier companion-based format, before embedded
+password metadata was added. They do not verify the later metadata-writing paths.
 
 Both self-contained Windows x64 executables were published successfully. All 19
 checks passed in the elevated native run, including:

@@ -58,17 +58,28 @@ Choose **New → VSUX (soft protected drive)** to create a blank locked image an
 Click **Attach** and enter the password, then use **Disk Manager** to initialize and format the
 new blank disk. To protect an existing detached standalone VHDX, open **Maintenance**, select
 **Soft protection**, then click **Protect as VSUX…** and set a password. It renames the image to
-`.vsux` in the same folder and creates its `.vsux.json` companion without copying the payload.
+`.vsux` in the same folder without copying the payload. New VSUX images store their password
+information inside the file: no JSON companion is needed, including on another PC.
 
 Open a `.vsux` file and click **Attach** to enter its password. **Detach & lock** safely
 flushes, locks and dismounts its volumes before restoring the mount lock; open files make it stop.
 These actions request administrator approval and run outside the auto-mount service.
 
+For an existing VSUX, open **Soft protection** from the toolbar to convert a legacy image to the
+single-file format, export optional recovery information, or **Convert back to VHDX…**. Conversion
+requires the password and a detached disk, removes the VSUX password metadata and renames the
+file in the same folder without copying its payload. Existing destination files are never replaced.
+Older VSUX images still need their `.vsux.json` companion until explicitly upgraded; keep that
+file as a backup after the upgrade. Optional recovery exports contain diagnostics, without a
+password verifier. An unrelated adjacent JSON file is left untouched when protecting a new image.
+
 VSUX keeps the data **unencrypted**. Its lock changes only the eight-byte VHDX signature, so
 ordinary VHDX mounting is blocked while locked, including on another PC. This is a convenience
-barrier that a specialist can bypass. Keep `disk.vsux` and `disk.vsux.json` together. An interrupted
-session can leave the disk unlocked, and power loss during a signature write still carries risk.
-Auto-mount and Maintenance are disabled for VSUX. See [VSUX usage and recovery](docs/VSUX.md).
+barrier that a specialist can bypass. An interrupted session can leave the disk unlocked, and
+power loss during a write still carries risk.
+Initial protection, a legacy upgrade and conversion back also update VHDX metadata through
+Windows; the eight-byte rule applies only to the raw signature writer. Auto-mount and ordinary
+Maintenance operations remain disabled for VSUX. See [VSUX usage and recovery](docs/VSUX.md).
 
 Setup includes an independent, self-contained recovery tool:
 
@@ -77,7 +88,9 @@ Setup includes an independent, self-contained recovery tool:
 ```
 
 Recovery needs no password or companion file. It restores only the eight signature bytes after
-validation and an exclusive-access check; rename the detached file to `.vhdx` to remove the lock.
+validation and an exclusive-access check; rename the detached file to `.vhdx` to use it normally.
+Use **Convert back to VHDX…** when the password is available to remove the embedded VSUX
+metadata too. A recovery-information JSON export is optional and is not a full backup.
 
 ### Maintenance (no Hyper-V required)
 
@@ -85,7 +98,7 @@ validation and an exclusive-access check; rename the detached file to `.vhdx` to
 
 | Task | What it does |
 |---|---|
-| **Soft protection** | Protect a detached standalone VHDX as VSUX. Sets a password and masks eight signature bytes; the data stays unencrypted. Keep a full backup separately. |
+| **Soft protection** | Protect a detached standalone VHDX as a single-file VSUX. Stores password information in VHDX metadata and masks eight signature bytes; the data stays unencrypted. Keep a full backup separately. |
 | **Compact** | Returns free space to the host. Full (NTFS/ReFS-aware) or zeroed-blocks-only mode for WSL / Docker `ext4.vhdx`, with optional `wsl --shutdown`. Shows the before/after size. |
 | **Resize** | Grow VHD/VHDX, or shrink VHDX down to the smallest safe size. |
 | **Convert** | VHD ↔ VHDX, dynamic ↔ fixed, 512 / 4K logical sectors. The source file is never modified. |
@@ -97,8 +110,8 @@ validation and an exclusive-access check; rename the detached file to `.vhdx` to
 Maintenance operations that change disk contents or metadata first show exactly what will change and make a
 **verified backup** (checksum re-read from disk) (enabled by default when there is room). They refuse disks that are attached
 or in use, and check the result afterwards. Long operations show progress, and those that are
-safe to interrupt can be cancelled. VSUX soft protection retains recovery diagnostics rather than
-a full backup; make one before protecting an existing image.
+safe to interrupt can be cancelled. VSUX soft protection and conversion back do not make a full
+backup; make one before changing an existing image. Optional recovery diagnostics are not a backup.
 
 ### Disk Manager (DiskPart GUI)
 
@@ -126,8 +139,10 @@ verified backups before in-place Maintenance changes, protects system, boot, pag
 re-checks every disk before changing it, refuses to touch volumes with open files, and logs every
 change to `%ProgramData%\xGND Software\VHD Studio\Logs`. The full model is in [docs/SAFETY.md](docs/SAFETY.md).
 An end-to-end test suite verifies the data on real virtual disks byte for byte after every operation.
-VSUX writes only its eight signature bytes and retains recovery diagnostics in the companion file;
-it does not make a full backup. Keep one before adopting this experimental format.
+VSUX uses an eight-byte signature lock and stores its password information in VHDX metadata.
+Initial protection, legacy upgrades and conversion back update additional container metadata;
+Windows also performs normal disk I/O while attached. No VSUX action makes a full backup. Keep
+one before adopting this experimental format or changing an existing image.
 
 
 ## Installation

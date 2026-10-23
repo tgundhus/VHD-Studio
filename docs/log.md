@@ -84,3 +84,21 @@ Read this when you want to know what changed in the documentation and when. Appe
   exception, and new VSUX creation's locked detached result, destination-collision refusal and
   preservation of partial artifacts. Clarified that protected containers remain excluded from
   standard Maintenance operations.
+- Added the 5.2.0 section to [CHANGELOG.md](../CHANGELOG.md) and updated
+  [README.md](../README.md), [VSUX.md](VSUX.md) and [the website](../site/index.html) for
+  single-file VSUX password records, explicit migration of earlier companion-based images,
+  password-based conversion back to VHDX and optional recovery-information JSON exports.
+  Explained that earlier JSON is retained as a backup, exports contain no password verifier,
+  and standalone recovery still requires neither a password nor JSON. Kept the visible FAQ
+  identical to its JSON-LD answer.
+- Updated [SAFETY.md](SAFETY.md) to distinguish the raw writer's eight-byte signature boundary
+  from the additional Windows VHDX metadata/header/log updates during initial protection,
+  legacy upgrades and conversion back. Documented detached clean-image/password checks,
+  refusal of existing destinations, preservation of unrelated metadata and adjacent JSON, and
+  the need for a full backup before changing an existing image.
+- Updated [VSUX.md](VSUX.md)'s disposable verification instructions to distinguish synthetic
+  legacy-companion fixtures from native single-file protection checks and their byte-preservation
+  baseline after initial metadata creation. Updated the prototype UI and CLI help to describe
+  single-file VSUX and the expanded metadata write boundary. Updated the
+  [prototype guide](../Research/VsuPrototype/README.md) for the same behavior, legacy migration,
+  standalone recovery retaining embedded metadata and the historical scope of its original results.

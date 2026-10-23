@@ -160,7 +160,7 @@ namespace VhdAttach {
             this.AddHeading(flow, "Soft protection (VSUX)");
             this.AddParagraph(flow, "Create a soft protected drive that asks for a password when you click Attach in VHD Studio. Ordinary virtual disk tools cannot open it while locked.");
             this.AddParagraph(flow, "The disk data stays unencrypted. Specialists and the standalone recovery tool can restore access without the password.", Ui.Muted);
-            this.AddParagraph(flow, "Protection renames this detached VHDX to .vsux, creates its companion .vsux.json file, and changes only the eight signature bytes. Keep both files together when moving the drive to another PC.");
+            this.AddParagraph(flow, "Protection stores a small password record inside the VHDX and renames it to .vsux. The file travels by itself; a JSON companion is optional. Initial protection changes container metadata; later signature locking changes eight bytes. Make a full backup first.");
             this.AddParagraph(flow, "Use Detach && lock in VHD Studio when finished. It flushes and safely detaches the drive before locking, and refuses while files are open.");
             var run = this.AddButton(flow, "&Protect as VSUX…", Ui.Glyph.Shield);
             run.Name = "ProtectVsuxButton";
@@ -185,11 +185,11 @@ namespace VhdAttach {
                     Medo.MessageBox.ShowWarning(this, "Save the VSUX file in the same folder as the source VHDX image.");
                     return;
                 }
-                if (File.Exists(target.FileName) || Directory.Exists(target.FileName) || File.Exists(target.FileName + ".json") || Directory.Exists(target.FileName + ".json")) {
-                    Medo.MessageBox.ShowWarning(this, "The destination or its companion file already exists. Choose a new name.");
+                if (File.Exists(target.FileName) || Directory.Exists(target.FileName)) {
+                    Medo.MessageBox.ShowWarning(this, "The destination already exists. Choose a new name.");
                     return;
                 }
-                if (Medo.MessageBox.ShowQuestion(this, "This renames the detached VHDX to .vsux and creates a companion .vsux.json file. Only the eight signature bytes change; the disk data stays unencrypted.\n\nKeep both files together. Standalone recovery can restore access without the password. Continue?", MessageBoxButtons.YesNo) != DialogResult.Yes) { return; }
+                if (Medo.MessageBox.ShowQuestion(this, "This stores password information in the VHDX's custom metadata and renames the detached image to .vsux. The data stays unencrypted, and the file works without a JSON companion.\n\nMake a full backup first. Initial protection writes container metadata in addition to the eight signature bytes. Standalone recovery can restore access without the password. Continue?", MessageBoxButtons.YesNo) != DialogResult.Yes) { return; }
                 this.IsBusy = true;
                 this.Page.Enabled = false;
                 this.TaskList.Enabled = false;

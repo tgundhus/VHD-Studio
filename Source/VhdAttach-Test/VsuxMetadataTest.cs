@@ -339,6 +339,33 @@ namespace VhdAttachTest {
             return image;
         }
 
+        [TestMethod]
+        [DataRow(0)]
+        [DataRow(4097)]
+        public void IndependentRecovery_IgnoresInvalidPrivateCredentialEntry(int credentialLength) {
+            var container = this.CreateProtected();
+            var bytes = File.ReadAllBytes(container);
+            var location = FindPasswordEntry(bytes);
+            var offset = credentialLength == 0 ? 0 : location.RegionLength - 8192;
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(location.Entry + 16), (uint)offset);
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(location.Entry + 20), (uint)credentialLength);
+            if (credentialLength > 0) { bytes.AsSpan(location.Region + offset, credentialLength).Fill(0x5A); }
+            File.WriteAllBytes(container, bytes); // Only this test's fresh image, with a structurally valid user item.
+            Assert.ThrowsExactly<InvalidDataException>(() => VsuxOperations.Unlock(container, Password));
+            CollectionAssert.AreEqual(bytes, File.ReadAllBytes(container), "Invalid password metadata caused an image write.");
+
+            var signatureType = typeof(VsuxOperations).Assembly.GetType("VhdStudio.Vsux.SignatureFile", throwOnError: true);
+            try { signatureType.GetMethod("Restore", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { container }); }
+            catch (TargetInvocationException error) when (error.InnerException != null) { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); }
+
+            var restored = File.ReadAllBytes(container);
+            Assert.IsTrue(restored.AsSpan(0, 8).SequenceEqual("vhdxfile"u8));
+            Assert.IsTrue(bytes.AsSpan(8).SequenceEqual(restored.AsSpan(8)), "Recovery changed bytes outside the signature.");
+            var native = Path.ChangeExtension(container, ".vhdx");
+            File.Move(container, native, overwrite: false);
+            Assert.AreEqual("VHDX", VirtualDiskImage.GetDetails(native).Format);
+        }
+
         private string CreateProtected() {
             var image = this.CreateNative();
             var container = Path.ChangeExtension(image, ".vsux");
@@ -396,6 +423,13 @@ namespace VhdAttachTest {
         }
 
         private static int FindRecord(byte[] bytes) {
+            var location = FindPasswordEntry(bytes);
+            Assert.AreEqual(128u, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(location.Entry + 20)));
+            Assert.IsTrue(bytes.AsSpan(location.Data, 8).SequenceEqual("VSUXPWD2"u8));
+            return location.Data;
+        }
+
+        private static (int Data, int Entry, int Region, int RegionLength) FindPasswordEntry(byte[] bytes) {
             // Locate the active custom item, not a stale copy that Windows may leave in its VHDX log.
             var regions = bytes.AsSpan(192 * 1024, 64 * 1024);
             Assert.IsTrue(regions.Slice(0, 4).SequenceEqual("regi"u8));
@@ -410,14 +444,12 @@ namespace VhdAttachTest {
                 for (var item = 0; item < count; item++) {
                     var entry = table.Slice(32 + item * 32, 32);
                     if (new Guid(entry.Slice(0, 16)) != new Guid("F75CC1A7-70E1-43EF-B910-65F43DA2B132")) { continue; }
-                    Assert.AreEqual(128u, BinaryPrimitives.ReadUInt32LittleEndian(entry.Slice(20)));
                     var offset = checked(metadataOffset + (int)BinaryPrimitives.ReadUInt32LittleEndian(entry.Slice(16)));
-                    Assert.IsTrue(bytes.AsSpan(offset, 8).SequenceEqual("VSUXPWD2"u8));
-                    return offset;
+                    return (offset, metadataOffset + 32 + item * 32, metadataOffset, checked((int)BinaryPrimitives.ReadUInt32LittleEndian(region.Slice(24))));
                 }
             }
             Assert.Fail("The embedded test image contains no active VSUX password metadata item.");
-            return -1;
+            return default;
         }
 
         private static void AssertInUseRefusal(Action action) {

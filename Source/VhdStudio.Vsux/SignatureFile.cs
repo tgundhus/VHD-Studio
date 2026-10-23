@@ -35,7 +35,7 @@ internal sealed class SignatureFile : IDisposable {
         if (!allowDamagedSignature && !IsLocked && !signature.AsSpan().SequenceEqual(Normal)) {
             throw new InvalidDataException("Unknown image signature. Use standalone recovery for a damaged VSUX signature.");
         }
-        ValidateStructure(allowPendingLog);
+        ValidateStructure(allowPendingLog, readPasswordRecord: !allowDamagedSignature);
     }
 
     public static SignatureFile Open(string path, bool allowDamagedSignature = false, bool allowPendingLog = false, bool exclusive = true, bool allowRename = false) {
@@ -149,7 +149,7 @@ internal sealed class SignatureFile : IDisposable {
         return buffer;
     }
 
-    private void ValidateStructure(bool allowPendingLog) {
+    private void ValidateStructure(bool allowPendingLog, bool readPasswordRecord) {
         byte[]? current = null;
         foreach (var offset in new[] { 64 * 1024, 128 * 1024 }) {
             var header = Read(offset, 4096);
@@ -214,7 +214,7 @@ internal sealed class SignatureFile : IDisposable {
                 if (metadataRanges.Any(range => offset < range.End && range.Start < (ulong)offset + length)) { throw new InvalidDataException("Overlapping VHDX metadata items."); }
                 metadataRanges.Add((offset, checked(offset + length)));
             }
-            if (id == PasswordMetadataId) {
+            if (id == PasswordMetadataId && readPasswordRecord) {
                 if (!isUser || (flags & 4) != 0 || EmbeddedPasswordRecord != null || length is < 1 or > 4096) { throw new InvalidDataException("Invalid embedded VSUX metadata entry."); }
                 EmbeddedPasswordRecord = Read(metadataOffset + offset, (int)length);
             } else if (id == diskIdGuid && !isUser) {

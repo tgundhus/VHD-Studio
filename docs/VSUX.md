@@ -137,7 +137,8 @@ structures, restores only bytes 0–7, flushes and verifies the write, and leave
 other bytes unchanged. It accepts partially written signatures but refuses pending logs,
 differencing disks and invalid metadata. It does not repair disk contents or restore a header
 snapshot. After successful recovery, rename the detached `.vsux` to `.vhdx` to use it normally.
-Embedded VSUX metadata may remain; recovery deliberately changes only the eight signature
+An empty, oversized or damaged VSUX password record does not block recovery when the generic
+VHDX structures remain valid. Embedded VSUX metadata may remain; recovery deliberately changes only the eight signature
 bytes. Use the password-based **Convert back to VHDX…** action for normal removal of that record.
 
 ## Disposable-image verification

@@ -102,3 +102,6 @@ Read this when you want to know what changed in the documentation and when. Appe
   single-file VSUX and the expanded metadata write boundary. Updated the
   [prototype guide](../Research/VsuPrototype/README.md) for the same behavior, legacy migration,
   standalone recovery retaining embedded metadata and the historical scope of its original results.
+- Clarified that independent recovery ignores invalid private password records while validating
+  generic VHDX structures, and documented conversion's no-overwrite file-handle rename order
+  and preservation of the original lock state during legacy upgrades.

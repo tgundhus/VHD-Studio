@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using VhdStudio.Vsux;
 
 namespace VhdAttach {
     internal partial class AttachForm : Form {
@@ -12,6 +13,7 @@ namespace VhdAttach {
         private readonly bool MountReadOnly;
         private readonly bool InitializeDisk;
         private List<Exception> _exceptions;
+        private DialogResult VsuxResult = DialogResult.OK;
 
         private AttachForm() {
             InitializeComponent();
@@ -50,6 +52,12 @@ namespace VhdAttach {
                     iFile = this.Files[i];
                     bw.ReportProgress(-1, iFile.Name);
 
+                    if (VsuxOperations.IsVsuxPath(iFile.FullName)) {
+                        this.VsuxResult = (DialogResult)this.Invoke((Func<DialogResult>)(() => VsuxForm.RunOperation(this, "Attach", iFile.FullName, this.MountReadOnly)));
+                        if (this.VsuxResult != DialogResult.OK) { break; }
+                        continue;
+                    }
+
                     Utility.FixServiceErrorsIfNeeded();
                     var res = PipeClient.Attach(iFile.FullName, this.MountReadOnly, this.InitializeDisk);
                     if (res.IsError) {
@@ -73,14 +81,19 @@ namespace VhdAttach {
 
             this.progress.Value = 100;
             Medo.Windows.Forms.TaskbarProgress.SetPercentage(100);
-            if (e.Error == null) {
+            if (e.Error == null && this.VsuxResult == DialogResult.OK) {
                 Medo.Windows.Forms.TaskbarProgress.SetState(Medo.Windows.Forms.TaskbarProgressState.Normal);
-            } else {
+                this.DialogResult = DialogResult.OK;
+            } else if (e.Error != null) {
                 Medo.Windows.Forms.TaskbarProgress.SetState(Medo.Windows.Forms.TaskbarProgressState.Error);
                 System.Environment.ExitCode = 1;
                 foreach (var iException in this._exceptions) {
                     Medo.MessageBox.ShowError(this, string.Format("Virtual disk file \"{0}\" cannot be attached.\n\n{1}", iException.Message, iException.InnerException.Message));
                 }
+                this.DialogResult = DialogResult.Abort;
+            } else {
+                System.Environment.ExitCode = this.VsuxResult == DialogResult.Cancel ? 2 : 1;
+                this.DialogResult = this.VsuxResult;
             }
             this.Close();
         }

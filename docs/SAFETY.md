@@ -10,8 +10,9 @@ and change-approval boards.
 1. **Never replace or delete what we didn't create.** New disks, conversions and backups use
    create-new semantics and refuse existing files. A failed or cancelled operation removes only the
    file it created itself.
-2. **Never write when asked to read.** A read-only attach never modifies the image, not even to
-   replay a pending VHDX log.
+2. **Never write to a mounted read-only disk.** A read-only VHD/VHDX/ISO attach never modifies
+   the image, not even to replay a pending VHDX log. VSUX must restore its eight-byte signature
+   before mounting and mask it after safe detach, including for read-only use; its payload stays read-only.
 3. **Back up before changing in place, and make sure the backup is usable.** Every Maintenance
    operation that modifies an existing file offers a backup, enabled by default whenever there is
    enough free space. The backup is stored plainly (never compressed, encrypted or sparse, whatever the
@@ -50,6 +51,30 @@ and change-approval boards.
 | Fix parent path | child detached, candidate parent detached, backup **mandatory** | no | checked before writing (VHD: identifier; VHDX: the child's `parent_linkage` must equal the parent's DataWriteGuid, which also detects a parent modified after the child was created); Windows then re-validates the chain; on rejection the previous path is restored, or the user is told to restore the backup |
 | Reset identifier | detached, typed confirmation | no | none |
 | Replay log | detached | no | the log must be clear afterwards |
+
+### VSUX mount lock (elevated helper)
+
+VSUX is an experimental application password gate over an unencrypted VHDX, not encryption or
+an access-control boundary against specialists. Only bytes 0–7 are changed by its raw writer:
+`vsuxlock` when locked, `vhdxfile` when unlocked. Native read/write mounting can naturally change
+the rest of the image. The image's password verifier and recovery diagnostics live in the
+adjacent `.vsux.json` file, which must travel with it for password-based use.
+
+| Risk | Safeguard or limit |
+|---|---|
+| Masking a disk while files remain open | Volumes must flush, lock and dismount before detach. Masking needs exclusive file access and validates the VHDX structures. VSUX has no force-detach path. |
+| Wrong password, missing or invalid companion file | Password operations stop before changing the signature. The companion is validated against the image's stable identifier. |
+| First protection loses the password metadata | The companion is committed, flushed and re-read before the first signature change; existing destination files are never overwritten. |
+| Password exposure through service IPC, process arguments or logs | VSUX prompts in its elevated process and does not send passwords to the attach service or put them on the command line or in audit details. |
+| An unattended path bypasses the prompt or changes locked-image metadata | VSUX is excluded from service attach/auto-mount and Maintenance. Use its dedicated Attach and Detach and lock actions. |
+| Lost password or companion, or an interrupted signature write | Independent `Recovery\VsuRecover.exe --restore <path>` validates the remaining structures, requires exclusive access and restores only the public eight-byte identifier. It requires no password, companion or saved header snapshot. |
+| Application exit, crash or Windows shutdown while unlocked | Closing VHD Studio does not promise automatic relocking. An interrupted session can leave the normal signature available; check the state and use Detach and lock. |
+| Power loss during a signature write | Eight-byte writes are not guaranteed atomic. Changing the identifier violates the normal VHDX writing rules. Structural checks and recovery reduce mistakes but cannot promise zero corruption risk. Keep a full backup. |
+
+The first-MiB snapshot in the companion is diagnostic data. Neither the normal lock path nor
+standalone recovery writes it back over current VHDX metadata. Recovery refuses pending logs,
+differencing disks and invalid structures; it never repairs a filesystem or rolls back disk data.
+See [VSUX usage and recovery](VSUX.md).
 
 ### Disk Manager (partitions and volumes)
 | Risk | Safeguard |

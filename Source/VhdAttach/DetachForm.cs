@@ -4,12 +4,14 @@ using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using VhdStudio.Vsux;
 
 namespace VhdAttach {
     internal partial class DetachForm : Form {
 
         private IList<FileInfo> _files;
         private List<Exception> _exceptions;
+        private DialogResult VsuxResult = DialogResult.OK;
 
 
         public DetachForm(IList<FileInfo> file) {
@@ -40,6 +42,12 @@ namespace VhdAttach {
                     iFile = this._files[i];
                     bw.ReportProgress(-1, iFile.Name);
 
+                    if (VsuxOperations.IsVsuxPath(iFile.FullName)) {
+                        this.VsuxResult = (DialogResult)this.Invoke((Func<DialogResult>)(() => VsuxForm.RunOperation(this, "Lock", iFile.FullName)));
+                        if (this.VsuxResult != DialogResult.OK) { break; }
+                        continue;
+                    }
+
                     Utility.FixServiceErrorsIfNeeded();
                     var res = PipeClient.Detach(iFile.FullName, false);
                     while (res.IsInUse) { //files are open: never cut them off without asking
@@ -63,7 +71,7 @@ namespace VhdAttach {
         }
 
         private void bw_ProgressChanged(object sender, ProgressChangedEventArgs e) {
-            this.StatusLabel.Text = "Detaching" + Environment.NewLine + e.UserState.ToString();
+            this.StatusLabel.Text = (VsuxOperations.IsVsuxPath(e.UserState.ToString()) ? "Detaching & locking" : "Detaching") + Environment.NewLine + e.UserState.ToString();
         }
 
         private void bw_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e) {
@@ -71,14 +79,19 @@ namespace VhdAttach {
 
             this.progress.Value = 100;
             Medo.Windows.Forms.TaskbarProgress.SetPercentage(100);
-            if (e.Error == null) {
+            if (e.Error == null && this.VsuxResult == DialogResult.OK) {
                 Medo.Windows.Forms.TaskbarProgress.SetState(Medo.Windows.Forms.TaskbarProgressState.Normal);
-            } else {
+                this.DialogResult = DialogResult.OK;
+            } else if (e.Error != null) {
                 Medo.Windows.Forms.TaskbarProgress.SetState(Medo.Windows.Forms.TaskbarProgressState.Error);
                 System.Environment.ExitCode = 1;
                 foreach (var iException in this._exceptions) {
                     Medo.MessageBox.ShowError(this, string.Format("Virtual disk file \"{0}\" cannot be detached.\n\n{1}", iException.Message, iException.InnerException.Message));
                 }
+                this.DialogResult = DialogResult.Abort;
+            } else {
+                System.Environment.ExitCode = this.VsuxResult == DialogResult.Cancel ? 2 : 1;
+                this.DialogResult = this.VsuxResult;
             }
             this.Close();
         }

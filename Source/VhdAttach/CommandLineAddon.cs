@@ -41,6 +41,10 @@ namespace VhdAttach
             }
 
             string fileName = args[0];
+            if (VhdStudio.Vsux.VsuxOperations.IsVsuxPath(fileName)) {
+                showError("Open the VSUX file in VHD Studio and use Attach or Detach & lock. Changing its drive letter through this command is unavailable.");
+                return 1;
+            }
 
             if (!File.Exists(fileName)) {
                 string err = "Changing drive letter failed. File not found: " + fileName + "\n";

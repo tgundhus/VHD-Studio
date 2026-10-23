@@ -13,6 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\VhdStudio.Vsux\VhdStudio.Vsux.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="..\VhdAttach-Service\FileWithOptions.cs" Link="Shared\FileWithOptions.cs" />
     <Compile Include="..\VhdAttach-Service\ServiceSettings.cs" Link="Shared\ServiceSettings.cs" />
     <Compile Include="..\VhdAttach-Service\Volume.cs" Link="Shared\Volume.cs" />

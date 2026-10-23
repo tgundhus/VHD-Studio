@@ -167,6 +167,7 @@ namespace VhdAttachService {
                 var oldList = ServiceSettings.AutoAttachVhdList;
                 var newList = GetFwoArray(packet["AutoAttachList"]);
                 foreach (var fwo in newList) { //anything new or changed must be accessible to the caller
+                    VsuxGuard.RefuseOrdinaryRoute(fwo.FileName);
                     if (!Array.Exists(oldList, x => string.Equals(x.ToString(), fwo.ToString(), StringComparison.OrdinalIgnoreCase))) {
                         using (caller.GuardFile(fwo.FileName, fwo.ReadOnly ? FileAccess.Read : FileAccess.ReadWrite, strictPaths: true)) { }
                     }

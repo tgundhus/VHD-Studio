@@ -23,17 +23,32 @@ no administrator rights.
 
 Attaching goes through the Windows service. To test the service without installing it, run
 `VhdStudioService.exe /Interactive` from an elevated prompt. Maintenance and Disk Manager
-changes ask for elevation themselves.
+changes ask for elevation themselves. VSUX attach and detach-and-lock use an elevated helper
+with an interactive password prompt; they do not require the service or pass passwords on the command line.
 
 
 #### Installer ####
 
-    Setup\Publish.ps1                                  # test, publish to .\Publish, build installer
+    Setup\Publish.ps1                                  # test, publish to .\Publish\VhdStudio, build installer
     Setup\Publish.ps1 -SkipInstaller                   # binaries only
     Setup\Publish.ps1 -CertificateThumbprint <sha1>    # also sign executables and setup
 
 The installer is written to `Releases\vhdstudio-<version>-setup.exe`. Set the version in
 `Source\Directory.Build.props`.
+
+Production staging is `Publish\VhdStudio`; publishing cleans only that directory and preserves
+independently published research prototypes. `Publish\VhdStudio\Recovery\VsuRecover.exe` is always
+self-contained and single-file, even when the main app uses a shared runtime. Setup includes it
+under `{app}\Recovery` and registers the `.vsux` handler and Explorer verbs. Building does not
+install the service or change file associations.
+
+To publish only standalone recovery:
+
+    dotnet publish Research\VsuPrototype\Recovery\VsuRecover.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o Publish\VhdStudio\Recovery
+
+The recovery project compiles the production signature validator/writer directly and has no
+runtime dependency on the VHD Studio UI, service, password verifier or companion file. See
+[docs/VSUX.md](docs/VSUX.md) for VSUX behavior and disposable-image verification.
 
 
 #### Continuous integration ####
@@ -49,4 +64,6 @@ The installer is written to `Releases\vhdstudio-<version>-setup.exe`. Set the ve
 | `Source/VhdAttach` | `VhdStudio.exe`: the UI, Maintenance window (`MaintenanceForm.cs`) and Disk Manager (`Storage/`) |
 | `Source/VhdAttach-Service` | `VhdStudioService.exe`: attach/detach and auto-mount service. Also holds code shared with the UI (`VirtualDiskImage.cs`, `VhdxHeader.cs`, `Branding.cs`) |
 | `Source/VhdAttach-Test` | MSTest unit and integration tests |
+| `Source/VhdStudio.Vsux` | VSUX signature, companion file, password and native attach/detach engine |
+| `Research/VsuPrototype/Recovery` | Independently published `VsuRecover.exe`, sharing the production signature validator/writer |
 | `Setup` | Inno Setup script and publish script |

@@ -35,6 +35,8 @@ namespace VhdAttach {
 
                 Medo.Windows.Forms.TaskbarProgress.DoNotThrowNotImplementedException = true;
 
+                if (TryRunVsuxOperation()) { return; }
+
 
                 if (Medo.Application.Args.Current.ContainsKey("DiskManager")) {
                     var diskNumber = Medo.Application.Args.Current.GetValue("Disk", -1);
@@ -45,6 +47,11 @@ namespace VhdAttach {
                 if (Medo.Application.Args.Current.ContainsKey("Maintain")) {
                     var maintainFiles = Medo.Application.Args.Current.GetValues("");
                     if (maintainFiles.Length == 0) { System.Environment.Exit(1); }
+                    if (VhdStudio.Vsux.VsuxOperations.IsVsuxPath(maintainFiles[0].TrimEnd('\"'))) {
+                        Medo.MessageBox.ShowError(null, "VSUX containers use password attach and Detach & lock. Recover a standard VHDX before running Maintenance.");
+                        Environment.ExitCode = 1;
+                        return;
+                    }
                     Application.Run(new MaintenanceForm(maintainFiles[0].TrimEnd('\"'), Medo.Application.Args.Current.GetValue("Task", null)) { StartPosition = FormStartPosition.CenterScreen });
                     return;
                 }
@@ -100,6 +107,30 @@ namespace VhdAttach {
 
                 }
             }
+        }
+
+        private static bool TryRunVsuxOperation() {
+            string operation = null;
+            foreach (var name in new[] { "Attach", "Lock", "Protect" }) {
+                if (!Medo.Application.Args.Current.ContainsKey("Vsux" + name)) { continue; }
+                if (operation != null) {
+                    Medo.MessageBox.ShowError(null, "Specify only one VSUX operation.");
+                    Environment.ExitCode = 1;
+                    return true;
+                }
+                operation = name;
+            }
+            if (operation == null) { return false; }
+            var files = Medo.Application.Args.Current.GetValues("");
+            if (files.Length != (operation == "Protect" ? 2 : 1)) {
+                Medo.MessageBox.ShowError(null, "Specify a VSUX file, or a source VHDX and new VSUX path for protection.");
+                Environment.ExitCode = 1;
+                return true;
+            }
+            var result = VsuxForm.RunOperation(null, operation, files[0].TrimEnd('\"'),
+                Medo.Application.Args.Current.ContainsKey("readonly"), operation == "Protect" ? files[1].TrimEnd('\"') : null);
+            Environment.ExitCode = result == DialogResult.OK ? 0 : result == DialogResult.Cancel ? 2 : 1;
+            return true;
         }
 
 

@@ -40,6 +40,17 @@ namespace VhdAttach {
                     iDirectory = new DirectoryInfo(this._files[i].FullName);
                     bw.ReportProgress(-1, iDirectory.Name);
 
+                    var container = VsuxDriveRouting.FindContainer(iDirectory.FullName);
+                    if (container != null) {
+                        var result = (DialogResult)this.Invoke((Func<DialogResult>)(() => VsuxForm.RunOperation(this, "Lock", container)));
+                        if (result != DialogResult.OK) {
+                            Environment.ExitCode = result == DialogResult.Cancel ? 2 : 1;
+                            e.Cancel = true;
+                            return;
+                        }
+                        continue;
+                    }
+
                     Utility.FixServiceErrorsIfNeeded();
                     var res = PipeClient.DetachDrive(iDirectory.FullName, false);
                     while (res.IsInUse) { //files are open: never cut them off without asking
@@ -82,6 +93,7 @@ namespace VhdAttach {
 
         private void bw_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e) {
             if (this.IsDisposed) { return; }
+            if (e.Cancelled) { this.Close(); return; }
 
             this.progress.Value = 100;
             Medo.Windows.Forms.TaskbarProgress.SetPercentage(100);

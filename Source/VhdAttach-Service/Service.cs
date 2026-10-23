@@ -98,6 +98,10 @@ namespace VhdAttachService {
 
         private static void AttachAutomatics(List<FileWithOptions> todoList, List<FileWithOptions> failedList) {
             foreach (var fwo in todoList) {
+                if (VsuxGuard.IsVsux(fwo.FileName)) {
+                    AuditLog.Succeeded("Auto-attach skipped", fwo.FileName, "VSUX requires an interactive password prompt.");
+                    continue;
+                }
                 try {
                     Thread.Sleep(1000); //a bit of breather
                     if (VirtualDiskImage.IsAttached(fwo.FileName)) { //e.g. first start after installing over an older version

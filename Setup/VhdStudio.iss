@@ -1,12 +1,12 @@
-; VHD Studio setup (Inno Setup 6). Build with Setup\Publish.ps1, which publishes the binaries into ..\Publish first.
+; VHD Studio setup (Inno Setup 6). Setup\Publish.ps1 stages production binaries in ..\Publish\VhdStudio.
 
 #define AppExe         "VhdStudio.exe"
 #define ServiceExe     "VhdStudioService.exe"
-#define AppName        GetStringFileInfo('..\Publish\' + AppExe, 'ProductName')
-#define AppVersion     GetStringFileInfo('..\Publish\' + AppExe, 'ProductVersion')
-#define AppFileVersion GetStringFileInfo('..\Publish\' + AppExe, 'FileVersion')
-#define AppCompany     GetStringFileInfo('..\Publish\' + AppExe, 'CompanyName')
-#define AppCopyright   GetStringFileInfo('..\Publish\' + AppExe, 'LegalCopyright')
+#define AppName        GetStringFileInfo('..\Publish\VhdStudio\' + AppExe, 'ProductName')
+#define AppVersion     GetStringFileInfo('..\Publish\VhdStudio\' + AppExe, 'ProductVersion')
+#define AppFileVersion GetStringFileInfo('..\Publish\VhdStudio\' + AppExe, 'FileVersion')
+#define AppCompany     GetStringFileInfo('..\Publish\VhdStudio\' + AppExe, 'CompanyName')
+#define AppCopyright   GetStringFileInfo('..\Publish\VhdStudio\' + AppExe, 'LegalCopyright')
 #define AppBase        LowerCase(StringChange(AppName, ' ', ''))
 ; /DSelfContained builds the standalone installer (.NET runtime embedded, no prerequisite).
 #ifdef SelfContained
@@ -38,14 +38,14 @@ VersionInfoProductTextVersion={#AppVersionEx}
 VersionInfoVersion={#AppFileVersion}
 DefaultDirName={autopf}\{#AppName}
 OutputBaseFilename={#AppSetupFile}
-OutputDir=..\Releases
-SourceDir=..\Publish
+OutputDir=..\..\Releases
+SourceDir=..\Publish\VhdStudio
 AppId=VhdStudio
 CloseApplications=yes
 RestartApplications=no
 AppMutex=Global\VhdStudio
 UninstallDisplayIcon={app}\{#AppExe}
-SetupIconFile=..\Source\VhdAttach\Properties\App.ico
+SetupIconFile=..\..\Source\VhdAttach\Properties\App.ico
 WizardStyle=modern
 AlwaysShowComponentsList=no
 ArchitecturesAllowed=x64compatible
@@ -58,7 +58,7 @@ ShowLanguageDialog=no
 SolidCompression=yes
 ChangesAssociations=yes
 DisableWelcomePage=yes
-LicenseFile=..\Setup\License.rtf
+LicenseFile=..\..\Setup\License.rtf
 
 
 [Messages]
@@ -69,8 +69,9 @@ BeveledLabel={#AppName}
 
 [Files]
 Source: "*";                     DestDir: "{app}";  Excludes: "*.pdb";        Flags: ignoreversion recursesubdirs;
-Source: "..\README.md";          DestDir: "{app}";  DestName: "ReadMe.txt";   Flags: overwritereadonly uninsremovereadonly;  Attribs: readonly;
-Source: "..\LICENSE.md";         DestDir: "{app}";  DestName: "License.txt";  Flags: overwritereadonly uninsremovereadonly;  Attribs: readonly;
+Source: "Recovery\VsuRecover.exe"; DestDir: "{app}\Recovery"; Flags: ignoreversion;
+Source: "..\..\README.md";       DestDir: "{app}";  DestName: "ReadMe.txt";   Flags: overwritereadonly uninsremovereadonly;  Attribs: readonly;
+Source: "..\..\LICENSE.md";      DestDir: "{app}";  DestName: "License.txt";  Flags: overwritereadonly uninsremovereadonly;  Attribs: readonly;
 
 
 [Tasks]
@@ -93,6 +94,21 @@ Name: "{autoprograms}\{#AppName} Disk Manager";  Filename: "{app}\{#AppExe}";  P
 ; Only the marker is removed on uninstall; the auto-mount list survives so a reinstall keeps it.
 Root: HKLM;  Subkey: "Software\xGND Software\VHD Studio";                      ValueType: dword;   ValueName: "Installed";         ValueData: "1";              Flags: uninsdeletevalue;
 Root: HKLM;  Subkey: "Software\xGND Software";                                 ValueType: none;                                                                 Flags: uninsdeletekeyifempty;
+
+; VSUX belongs to VHD Studio, not the Windows VHD handler. Do not replace another app's default.
+Root: HKCR; Subkey: ".vsux"; ValueType: string; ValueName: ""; ValueData: "VhdStudio.Vsux"; Flags: createvalueifdoesntexist uninsdeletekeyifempty;
+Root: HKCR; Subkey: ".vsux\OpenWithProgids"; ValueType: string; ValueName: "VhdStudio.Vsux"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty;
+Root: HKCR; Subkey: "VhdStudio.Vsux"; ValueType: string; ValueName: ""; ValueData: "VHD Studio password-gated disk"; Flags: uninsdeletekey;
+Root: HKCR; Subkey: "VhdStudio.Vsux\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",0";
+Root: HKCR; Subkey: "VhdStudio.Vsux\shell"; ValueType: string; ValueName: ""; ValueData: "open";
+Root: HKCR; Subkey: "VhdStudio.Vsux\shell\open"; ValueType: string; ValueName: ""; ValueData: "Open with {#AppName}";
+Root: HKCR; Subkey: "VhdStudio.Vsux\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1""";
+Root: HKCR; Subkey: "VhdStudio.Vsux\shell\attach"; ValueType: string; ValueName: ""; ValueData: "Attach...";
+Root: HKCR; Subkey: "VhdStudio.Vsux\shell\attach\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" /attach ""%1""";
+Root: HKCR; Subkey: "VhdStudio.Vsux\shell\attachreadonly"; ValueType: string; ValueName: ""; ValueData: "Attach (read-only)...";
+Root: HKCR; Subkey: "VhdStudio.Vsux\shell\attachreadonly\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" /readonly /attach ""%1""";
+Root: HKCR; Subkey: "VhdStudio.Vsux\shell\detach"; ValueType: string; ValueName: ""; ValueData: "Detach and lock...";
+Root: HKCR; Subkey: "VhdStudio.Vsux\shell\detach\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" /detach ""%1""";
 
 ; Make the built-in Windows.VhdFile/Windows.IsoFile handlers own the extensions so the verbs below show up.
 Root: HKCR;  Subkey: ".vhd";                                                   ValueType: none;    ValueName: "";                  Flags: deletevalue;                                                     Tasks: context_vhd_open context_vhd_attach context_vhd_attachreadonly context_vhd_detach context_vhd_maintain;
@@ -180,6 +196,14 @@ const
 procedure InitializeWizard;
 begin
   WizardForm.LicenseAcceptedRadio.Checked := True;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Handler: String;
+begin
+  if (CurUninstallStep = usUninstall) and RegQueryStringValue(HKCR, '.vsux', '', Handler) and (Handler = 'VhdStudio.Vsux') then
+    RegDeleteValue(HKCR, '.vsux', '');
 end;
 
 function HasVersion10OrNewer(const Names: TArrayOfString): Boolean;

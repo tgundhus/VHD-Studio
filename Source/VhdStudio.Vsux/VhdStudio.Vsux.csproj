@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>VhdStudio.Vsux</RootNamespace>
+    <AssemblyName>VhdStudio.Vsux</AssemblyName>
+    <AssemblyTitle>VHD Studio VSUX support</AssemblyTitle>
+    <Description>Portable password-gated VHDX signature lock operations.</Description>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyOriginatorKeyFile>..\VhdAttach\Properties\App.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+</Project>

@@ -31,10 +31,10 @@ VHD Studio is developed by **Tobias Gundhus ([xGND Software](https://github.com/
 ## Features
 
 ### Attach & auto-mount
-* Attach / detach from Explorer's context menu (VHD, VHDX, ISO), read-only if you like.
+* Attach / detach from Explorer's context menu (VHD, VHDX, ISO, VSUX), read-only if you like.
 * **Auto-mount at startup** through a small Windows service: read-only, no drive letter, or
   **mounted into an empty folder** instead of a drive letter (folder mounts require an administrator).
-* Users without admin rights can attach disks, because the service does the privileged work.
+* Users without admin rights can attach ordinary disks, because the service does the privileged work.
   The service checks the user's own permissions first, so nobody can attach a file they couldn't open themselves.
 * **VHDX log replay.** A VHDX that wasn't closed cleanly (crash, power loss) normally fails with a
   confusing *"Access denied"*. VHD Studio detects the pending log and replays it for a normal attach.
@@ -43,6 +43,28 @@ VHD Studio is developed by **Tobias Gundhus ([xGND Software](https://github.com/
 * **Safe detach.** Volumes are flushed and locked before a disk is detached. If files are still open,
   you get the choice to retry instead of losing unsaved data.
 * Mapped network drives are translated to UNC paths so the service can reach them.
+
+### VSUX password prompt (experimental)
+
+For a detached VHDX, choose **Maintenance → Protect as VSUX…** and set a password.
+Open a `.vsux` file and click **Attach** to enter its password. **Detach & lock** safely
+flushes, locks and dismounts its volumes before restoring the mount lock; open files make it stop.
+These actions request administrator approval and run outside the auto-mount service.
+
+VSUX keeps the data **unencrypted**. Its lock changes only the eight-byte VHDX signature, so
+ordinary VHDX mounting is blocked while locked, including on another PC. This is a convenience
+barrier that a specialist can bypass. Keep `disk.vsux` and `disk.vsux.json` together. An interrupted
+session can leave the disk unlocked, and power loss during a signature write still carries risk.
+Auto-mount and Maintenance are disabled for VSUX. See [VSUX usage and recovery](docs/VSUX.md).
+
+Setup includes an independent, self-contained recovery tool:
+
+```powershell
+& "$env:ProgramFiles\VHD Studio\Recovery\VsuRecover.exe" --restore "D:\Disks\disk.vsux"
+```
+
+Recovery needs no password or companion file. It restores only the eight signature bytes after
+validation and an exclusive-access check; rename the detached file to `.vhdx` to remove the lock.
 
 ### Maintenance (no Hyper-V required)
 
@@ -95,10 +117,10 @@ An end-to-end test suite verifies the data on real virtual disks byte for byte a
 
 Download one of the installers from [Releases](https://github.com/tgundhus/VHD-Studio/releases):
 
-| Installer | Size | Use it when |
-|---|---|---|
-| `vhdstudio-<version>-setup-standalone.exe` | ~36 MB | You just want it to work. .NET is embedded, so there's nothing else to install. |
-| `vhdstudio-<version>-setup.exe` | ~2.4 MB | You manage machines centrally. Uses the shared [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0), which Windows Update, WSUS or Intune keep patched. Setup checks for it and links to the download if it's missing. |
+| Installer | Use it when |
+|---|---|
+| `vhdstudio-<version>-setup-standalone.exe` | You just want it to work. .NET is embedded, so there's nothing else to install. |
+| `vhdstudio-<version>-setup.exe` | You manage machines centrally. The main app uses the shared [.NET 10 Desktop Runtime (x64)](https://dotnet.microsoft.com/download/dotnet/10.0), which Windows Update, WSUS or Intune keep patched. Setup checks for it and links to the download if it's missing. Recovery always has its own embedded runtime. |
 
 Upgrading from **VHD Attach 4.x**: setup removes the old version and its service automatically and
 keeps your auto-mount list.
@@ -134,7 +156,13 @@ VhdStudio.exe /changeletter "disk.vhdx" "Y:"        Set the drive letter of an a
 VhdStudio.exe /maintain "disk.vhdx" [/task=Compact] Open Maintenance (Details, Compact, Resize,
                                                     Convert, Differencing, Merge, Repair)
 VhdStudio.exe /diskmanager [/disk=N]                Open Disk Manager
+VhdStudio.exe /attach "disk.vsux"                   Password prompt, then attach
+VhdStudio.exe /detach "disk.vsux"                   Password prompt, then safe detach and lock
+Recovery\VsuRecover.exe --restore "disk.vsux"        Standalone eight-byte recovery
 ```
+
+`/readonly` also works with VSUX. The mounted disk is read-only, but unlocking and relocking
+still write the eight signature bytes. Passwords are entered interactively, never on the command line.
 
 
 ## Building

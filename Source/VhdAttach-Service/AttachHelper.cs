@@ -15,6 +15,7 @@ namespace VhdAttachService {
         /// <param name="caller">User on whose behalf the service acts; PipeCaller.ForService() for boot-time auto-attach.</param>
         /// <param name="strictPaths">Also refuse hard-linked files (used for auto-attach entries, which non-admins may have added).</param>
         public static void Attach(FileWithOptions file, PipeCaller caller, bool initializeDisk = false, bool strictPaths = false) {
+            VsuxGuard.RefuseOrdinaryRoute(file.FileName);
             if (!File.Exists(file.FileName)) {
                 var missing = file.FileName;
                 if (missing.StartsWith(@"\\", StringComparison.Ordinal)) {
@@ -87,6 +88,7 @@ namespace VhdAttachService {
         /// detaching while files are open (force) is reserved for administrators.
         /// </remarks>
         public static void Detach(string path, bool force, PipeCaller caller) {
+            VsuxGuard.RefuseOrdinaryRoute(path);
             if (force) { caller.DemandAdministrator("Detaching a disk with open files"); }
             var normalized = path.StartsWith(@"\\", StringComparison.Ordinal) ? path : PathGuard.GetLongPath(Path.GetFullPath(path));
             var attached = GetAttachedImages().FirstOrDefault(i => string.Equals(i.Location, normalized, StringComparison.OrdinalIgnoreCase) || string.Equals(i.Location, path, StringComparison.OrdinalIgnoreCase));

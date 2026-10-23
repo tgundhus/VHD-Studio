@@ -15,6 +15,7 @@ using System.Threading;
 using System.Windows.Forms;
 using VhdAttachCommon;
 using VirtualHardDiskImage;
+using VhdStudio.Vsux;
 
 namespace VhdAttach {
 
@@ -52,13 +53,15 @@ namespace VhdAttach {
 
             this.Recent = new Medo.Configuration.RecentFiles();
 
-            this.Controls.Add(new Ui.Banner(Branding.ProductName, "Attach, maintain and partition VHD, VHDX and ISO images") { Font = this.Font });
+            this.Controls.Add(new Ui.Banner(Branding.ProductName, "Attach, maintain and partition VHD, VHDX, VSUX and ISO images") { Font = this.Font });
             this.AddStudioMenu();
         }
 
 
         private ToolStripSplitButton mnuMaintenance;
         private ToolStripButton mnuDiskManager;
+        private ToolStripMenuItem mnuProtectVsux;
+        private string LastVsuxDisplayState;
 
         private void AddStudioMenu() {
             var size = mnu.ImageScalingSize.Width;
@@ -68,6 +71,9 @@ namespace VhdAttach {
                 var taskName = task;
                 this.mnuMaintenance.DropDownItems.Add(task == "Differencing" ? "Create differencing disk…" : (task == "Merge" ? "Merge into parent…" : task + "…"), null, (s, e) => this.OpenMaintenance(taskName));
             }
+            this.mnuMaintenance.DropDownItems.Add(new ToolStripSeparator());
+            this.mnuProtectVsux = new ToolStripMenuItem("Protect as VSUX…", null, (s, e) => this.ProtectVsux()) { Enabled = false };
+            this.mnuMaintenance.DropDownItems.Add(this.mnuProtectVsux);
             this.mnuDiskManager = new ToolStripButton("Disk Manager", Ui.GetGlyph(Ui.Glyph.Disk, size, Ui.AccentDark), (s, e) => this.OpenDiskManager()) { ToolTipText = "DiskPart-style partition tools (Ctrl+D)" };
             var index = mnu.Items.IndexOf(mnuDrive) + 1;
             mnu.Items.Insert(index, new ToolStripSeparator());
@@ -99,6 +105,7 @@ namespace VhdAttach {
         /// Offers to fix the file in place; the content does not change. Returns true if the file was fixed.
         /// </summary>
         private bool OfferMakePlain(FileInfo file) {
+            if (VsuxOperations.IsVsuxPath(file.FullName)) { return false; }
             string problem;
             try { problem = file.Exists ? PlainFile.GetProblem(file.FullName) : null; } catch (IOException) { return false; } catch (UnauthorizedAccessException) { return false; }
             if (problem == null) { return false; }
@@ -114,16 +121,37 @@ namespace VhdAttach {
 
         private void OpenMaintenance(string task) {
             if (this.VhdFileName == null) { return; }
+            if (VsuxOperations.IsVsuxPath(this.VhdFileName)) { return; }
             using (var form = new MaintenanceForm(this.VhdFileName, task)) {
                 form.ShowDialog(this);
             }
             UpdateData(this.VhdFileName);
         }
 
+        private void ProtectVsux() {
+            if (this.VhdFileName == null || !string.Equals(Path.GetExtension(this.VhdFileName), ".vhdx", StringComparison.OrdinalIgnoreCase)) { return; }
+            using (var target = new SaveFileDialog {
+                Title = "Protect as VSUX in the same folder", Filter = "VSUX files (*.vsux)|*.vsux", DefaultExt = "vsux", AddExtension = true,
+                FileName = Path.GetFileNameWithoutExtension(this.VhdFileName) + ".vsux", InitialDirectory = Path.GetDirectoryName(this.VhdFileName), OverwritePrompt = false
+            }) {
+                if (target.ShowDialog(this) != DialogResult.OK) { return; }
+                if (!string.Equals(Path.GetDirectoryName(Path.GetFullPath(this.VhdFileName)), Path.GetDirectoryName(Path.GetFullPath(target.FileName)), StringComparison.OrdinalIgnoreCase)) {
+                    Medo.MessageBox.ShowWarning(this, "Save the VSUX file in the same folder as the source VHDX image.");
+                    return;
+                }
+                if (File.Exists(target.FileName) || Directory.Exists(target.FileName) || File.Exists(target.FileName + ".json") || Directory.Exists(target.FileName + ".json")) {
+                    Medo.MessageBox.ShowWarning(this, "The destination or its companion file already exists. Choose a new name.");
+                    return;
+                }
+                if (Medo.MessageBox.ShowQuestion(this, "This renames the detached VHDX to .vsux and creates a companion .vsux.json file. Only the eight signature bytes change; the disk data stays unencrypted.\n\nKeep both files together. Standalone recovery can restore access without the password. Continue?", MessageBoxButtons.YesNo) != DialogResult.Yes) { return; }
+                if (VsuxForm.RunOperation(this, "Protect", this.VhdFileName, destination: target.FileName) == DialogResult.OK) { this.OpenFile(target.FileName); }
+            }
+        }
+
         private void OpenDiskManager() {
             int? diskNumber = null;
             try {
-                if (this.VhdFileName != null) {
+                if (this.VhdFileName != null && !VsuxOperations.IsVsuxPath(this.VhdFileName)) {
                     var attachedPath = VirtualDiskImage.GetDetails(this.VhdFileName).AttachedPath; //\\.\PhysicalDriveN
                     var digits = attachedPath?.Substring(attachedPath.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9').Length);
                     if (int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)) { diskNumber = number; }
@@ -278,10 +306,21 @@ namespace VhdAttach {
                 mnuAutomount.Enabled = false;
                 mnuDrive.Enabled = false;
                 this.mnuMaintenance.Enabled = false;
+                this.mnuProtectVsux.Enabled = false;
                 mnuAutomount_DropDownOpening(null, null);
                 mnuDrive_DropDownOpening(null, null);
                 return;
             }
+
+            if (VsuxOperations.IsVsuxPath(vhdFileName)) {
+                this.UpdateVsuxData(vhdFileName);
+                return;
+            }
+
+            this.LastVsuxDisplayState = null;
+            mnuDetach.Text = "Detach";
+            mnuDetach.ToolTipText = "Detach virtual disk";
+            this.mnuProtectVsux.Enabled = false;
 
             try {
                 this.Cursor = Cursors.WaitCursor;
@@ -471,6 +510,7 @@ namespace VhdAttach {
                         mnuAutomount.Enabled = true;
                         mnuDrive.Enabled = true;
                         this.mnuMaintenance.Enabled = (document.DiskType != Medo.IO.VirtualDiskType.Iso);
+                        this.mnuProtectVsux.Enabled = mnuAttach.Enabled && string.Equals(fileInfo.Extension, ".vhdx", StringComparison.OrdinalIgnoreCase);
                         mnuAutomount_DropDownOpening(null, null);
                         mnuDrive_DropDownOpening(null, null);
 
@@ -497,6 +537,62 @@ namespace VhdAttach {
 
 
             this.Text = GetFileTitle(vhdFileName) + " - " + Medo.Reflection.EntryAssembly.Title;
+        }
+
+        private void UpdateVsuxData(string path, bool forceRefresh = true) {
+            mnuRefresh.Enabled = true;
+            mnuAttach.Enabled = false;
+            mnuDetach.Enabled = false;
+            mnuDetach.Text = "Detach && lock";
+            mnuDetach.ToolTipText = "Safely detach, then lock the VSUX drive";
+            mnuAutomount.Enabled = false;
+            mnuAutomount.Tag = null;
+            mnuAutomount.Text = "Auto-mount";
+            mnuDrive.Enabled = false;
+            mnuDrive.Tag = null;
+            mnuDrive.Text = "Drive";
+            mnuDrive.DropDownItems.Clear();
+            this.mnuMaintenance.Enabled = false;
+            this.mnuProtectVsux.Enabled = false;
+            var file = new FileInfo(path);
+            var items = new List<ListViewItem> {
+                new ListViewItem(new[] { "File path", file.DirectoryName }) { Group = GroupFileSystem },
+                new ListViewItem(new[] { "File name", file.Name }) { Group = GroupFileSystem },
+                new ListViewItem(new[] { "Format", "VSUX (VHDX mount lock)" }) { Group = GroupDetails },
+                new ListViewItem(new[] { "Data encryption", "None — disk data is unencrypted" }) { Group = GroupDetails },
+            };
+            var companionPresent = File.Exists(path + ".json");
+            string state;
+            try {
+                var info = VsuxOperations.GetInfo(path);
+                state = info.IsLocked ? "Locked" : info.IsAttached ? "Attached (unlocked)" : "Unlocked and detached";
+                items.Add(new ListViewItem(new[] { "Status", state }) { Group = GroupDetails });
+                items.Add(new ListViewItem(new[] { "File size", Ui.FormatSize(info.Length) }) { Group = GroupFileSystem });
+                items.Add(new ListViewItem(new[] { "Identifier", info.DiskId.ToString() }) { Group = GroupDetails });
+                if (info.IsAttached) { items.Add(new ListViewItem(new[] { "Attached device", info.AttachedPath }) { Group = GroupFileSystem }); }
+                mnuAttach.Enabled = !info.IsAttached && companionPresent;
+                mnuDetach.Enabled = !info.IsLocked && companionPresent;
+                if (!info.IsLocked) { items.Add(new ListViewItem(new[] { "Lock", "Use Detach & lock to restore the mount lock" }) { Group = GroupDetails }); }
+                state += "|" + info.AttachedPath;
+            } catch (Exception ex) {
+                state = ex.Message;
+                items.Add(new ListViewItem(new[] { "Status", "Unknown — " + ex.Message }) { Group = GroupDetails });
+                items.Add(new ListViewItem(new[] { "Recovery", "Use VsuRecover.exe for a damaged signature or missing password metadata" }) { Group = GroupDetails });
+            }
+            items.Add(new ListViewItem(new[] { "Companion file", companionPresent ? Path.GetFileName(path) + ".json" : "Missing — keep the .vsux.json file beside this image" }) { Group = GroupDetails });
+            var displayState = path + "|" + state + "|" + companionPresent;
+            if (forceRefresh || this.LastVsuxDisplayState != displayState) {
+                list.BeginUpdate();
+                list.Items.Clear();
+                list.Groups.Clear();
+                list.Groups.Add(GroupFileSystem);
+                list.Groups.Add(GroupDetails);
+                list.Items.AddRange(items.ToArray());
+                list.EndUpdate();
+                this.LastVsuxDisplayState = displayState;
+                this.EnsureToolbarFits();
+            }
+            this.Text = GetFileTitle(path) + " - " + Medo.Reflection.EntryAssembly.Title;
         }
 
         private void UpdateRecent() {
@@ -562,7 +658,7 @@ namespace VhdAttach {
                 dialog.CheckPathExists = true;
                 dialog.DefaultExt = "vhd";
                 if ((Environment.OSVersion.Version.Major * 1000000 + Environment.OSVersion.Version.Minor) >= 6000002) { //show if equal to or higher than Windows 8
-                    dialog.Filter = "Supported files (*.vhd; *.vhdx; *.iso)|*.vhd;*.vhdx;*.iso|Virtual disk files (*.vhd; *.vhdx)|*.vhd;*.vhdx|ISO image files (*.iso)|*.iso|All files (*.*)|*.*";
+                    dialog.Filter = "Supported files (*.vhd; *.vhdx; *.vsux; *.iso)|*.vhd;*.vhdx;*.vsux;*.iso|Virtual disk files (*.vhd; *.vhdx; *.vsux)|*.vhd;*.vhdx;*.vsux|VSUX drives (*.vsux)|*.vsux|ISO image files (*.iso)|*.iso|All files (*.*)|*.*";
                 } else {
                     dialog.Filter = "Virtual disk files (*.vhd)|*.vhd|All files (*.*)|*.*";
                 }
@@ -578,6 +674,13 @@ namespace VhdAttach {
             var file = new FileInfo(fileName);
             try {
                 if (!file.Exists) { throw new IOException("File not found."); }
+                if (VsuxOperations.IsVsuxPath(file.FullName)) {
+                    this.VhdFileName = file.FullName;
+                    Recent.Push(file.FullName);
+                    UpdateRecent();
+                    UpdateData(file.FullName);
+                    return;
+                }
 
                 var isIntegrityStream = ReFS.HasIntegrityStream(file);
                 if (isIntegrityStream && Medo.MessageBox.ShowWarning(this, string.Format("Integrity stream is enabled for \"{0}\".\n\nVirtual disk does not support ReFS integrity streams.\n\nDo you wish to remove integrity stream?", file.Name), MessageBoxButtons.YesNo) == DialogResult.Yes) {
@@ -646,6 +749,14 @@ namespace VhdAttach {
 
 
         private void mnuAutomount_DropDownOpening(object sender, EventArgs e) {
+            if (VsuxOperations.IsVsuxPath(this.VhdFileName)) {
+                mnuAutomount.Tag = null;
+                mnuAutomount.Text = "Auto-mount";
+                mnuAutomountNormal.Enabled = false;
+                mnuAutomountReadonly.Enabled = false;
+                mnuAutomountDisable.Enabled = false;
+                return;
+            }
             bool isAutoMountNormal = false;
             bool isAutoMountReadonly = false;
             foreach (var fwo in ServiceSettings.AutoAttachVhdList) {
@@ -692,6 +803,7 @@ namespace VhdAttach {
         }
 
         private void mnuAutomountNormal_Click(object sender, EventArgs e) {
+            if (VsuxOperations.IsVsuxPath(this.VhdFileName)) { return; }
             var list = new FileWithOptionsCollection(ServiceSettings.AutoAttachVhdList);
             list.Remove(this.VhdFileName);
             list.Add(new FileWithOptions(PathHelper.ToServicePath(this.VhdFileName)));
@@ -700,6 +812,7 @@ namespace VhdAttach {
         }
 
         private void mnuAutomountReadonly_Click(object sender, EventArgs e) {
+            if (VsuxOperations.IsVsuxPath(this.VhdFileName)) { return; }
             var list = new FileWithOptionsCollection(ServiceSettings.AutoAttachVhdList);
             list.Remove(this.VhdFileName);
             list.Add(new FileWithOptions(PathHelper.ToServicePath(this.VhdFileName)) { ReadOnly = true });
@@ -735,6 +848,13 @@ namespace VhdAttach {
 
 
         private void mnuDrive_DropDownOpening(object sender, EventArgs e) {
+            if (VsuxOperations.IsVsuxPath(this.VhdFileName)) {
+                mnuDrive.Tag = null;
+                mnuDrive.Text = "Drive";
+                mnuDrive.DropDownItems.Clear();
+                mnuDrive.Enabled = false;
+                return;
+            }
             string newMenuTitle = null;
 
             string attachedDevice = null;
@@ -813,6 +933,7 @@ namespace VhdAttach {
         }
 
         private void mnuDriveLetter_Click(object sender, EventArgs e) {
+            if (VsuxOperations.IsVsuxPath(this.VhdFileName)) { return; }
             var volume = ((ToolStripDropDownItem)sender).Tag as Volume;
             using (var frm = new ChangeDriveLetterForm(volume)) {
                 if (frm.ShowDialog(this) == DialogResult.OK) {
@@ -907,9 +1028,15 @@ namespace VhdAttach {
             for (int i = 0; i < filesToOpen.Length; ++i) {
                 iFile = new FileInfo(filesToOpen[i]);
                 try {
-                    var newDocument = new Medo.IO.VirtualDisk(iFile.FullName);
-                    UpdateData(newDocument.FileName);
-                    this.VhdFileName = newDocument.FileName;
+                    if (!iFile.Exists) { throw new IOException("File not found."); }
+                    if (VsuxOperations.IsVsuxPath(iFile.FullName)) {
+                        this.VhdFileName = iFile.FullName;
+                        UpdateData(iFile.FullName);
+                    } else {
+                        var newDocument = new Medo.IO.VirtualDisk(iFile.FullName);
+                        UpdateData(newDocument.FileName);
+                        this.VhdFileName = newDocument.FileName;
+                    }
                     Recent.Push(iFile.FullName);
 
                     //send all other files to second instances
@@ -994,6 +1121,11 @@ namespace VhdAttach {
                 return;
             }
 
+            if (VsuxOperations.IsVsuxPath(this.VhdFileName)) {
+                this.UpdateVsuxData(this.VhdFileName, forceRefresh: false);
+                return;
+            }
+
             try {
                 mnuRefresh.Enabled = true;
 
@@ -1009,6 +1141,7 @@ namespace VhdAttach {
                     mnuDetach.Enabled = !mnuAttach.Enabled;
                     mnuAutomount.Enabled = true;
                     mnuDrive.Enabled = true;
+                    this.mnuProtectVsux.Enabled = mnuAttach.Enabled && string.Equals(Path.GetExtension(this.VhdFileName), ".vhdx", StringComparison.OrdinalIgnoreCase);
                     if (!mnuAutomount.DropDownButtonPressed) { mnuAutomount_DropDownOpening(null, null); }
                     if (!mnuDrive.DropDownButtonPressed) { mnuDrive_DropDownOpening(null, null); }
                 }
@@ -1042,16 +1175,7 @@ namespace VhdAttach {
             if (e.Data.GetDataPresent(DataFormats.FileDrop)) {
                 var files = (string[])e.Data.GetData(DataFormats.FileDrop);
                 if (files.Length == 1) {
-                    try {
-                        var newDocument = new Medo.IO.VirtualDisk(files[0]);
-                        UpdateData(newDocument.FileName);
-                        this.VhdFileName = newDocument.FileName;
-                        Recent.Push(files[0]);
-                        UpdateRecent();
-                    } catch (Exception ex) {
-                        var exFile = new FileInfo(files[0]);
-                        Medo.MessageBox.ShowError(this, string.Format("Cannot open \"{0}\".\n\n{1}", exFile.Name, ex.Message));
-                    }
+                    this.OpenFile(files[0]);
                 }
             }
         }

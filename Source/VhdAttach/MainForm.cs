@@ -124,28 +124,16 @@ namespace VhdAttach {
             if (VsuxOperations.IsVsuxPath(this.VhdFileName)) { return; }
             using (var form = new MaintenanceForm(this.VhdFileName, task)) {
                 form.ShowDialog(this);
+                if (form.ProtectedFileName != null) {
+                    this.OpenFile(form.ProtectedFileName);
+                    return;
+                }
             }
             UpdateData(this.VhdFileName);
         }
 
         private void ProtectVsux() {
-            if (this.VhdFileName == null || !string.Equals(Path.GetExtension(this.VhdFileName), ".vhdx", StringComparison.OrdinalIgnoreCase)) { return; }
-            using (var target = new SaveFileDialog {
-                Title = "Protect as VSUX in the same folder", Filter = "VSUX files (*.vsux)|*.vsux", DefaultExt = "vsux", AddExtension = true,
-                FileName = Path.GetFileNameWithoutExtension(this.VhdFileName) + ".vsux", InitialDirectory = Path.GetDirectoryName(this.VhdFileName), OverwritePrompt = false
-            }) {
-                if (target.ShowDialog(this) != DialogResult.OK) { return; }
-                if (!string.Equals(Path.GetDirectoryName(Path.GetFullPath(this.VhdFileName)), Path.GetDirectoryName(Path.GetFullPath(target.FileName)), StringComparison.OrdinalIgnoreCase)) {
-                    Medo.MessageBox.ShowWarning(this, "Save the VSUX file in the same folder as the source VHDX image.");
-                    return;
-                }
-                if (File.Exists(target.FileName) || Directory.Exists(target.FileName) || File.Exists(target.FileName + ".json") || Directory.Exists(target.FileName + ".json")) {
-                    Medo.MessageBox.ShowWarning(this, "The destination or its companion file already exists. Choose a new name.");
-                    return;
-                }
-                if (Medo.MessageBox.ShowQuestion(this, "This renames the detached VHDX to .vsux and creates a companion .vsux.json file. Only the eight signature bytes change; the disk data stays unencrypted.\n\nKeep both files together. Standalone recovery can restore access without the password. Continue?", MessageBoxButtons.YesNo) != DialogResult.Yes) { return; }
-                if (VsuxForm.RunOperation(this, "Protect", this.VhdFileName, destination: target.FileName) == DialogResult.OK) { this.OpenFile(target.FileName); }
-            }
+            this.OpenMaintenance("Soft protection");
         }
 
         private void OpenDiskManager() {
@@ -633,6 +621,11 @@ namespace VhdAttach {
                 if (frm.ShowDialog(this) == DialogResult.OK) {
                     AllowSetForegroundWindowToExplorer();
                     var fileName = frm.FileName;
+                    if (VsuxOperations.IsVsuxPath(fileName)) {
+                        this.OpenFile(fileName);
+                        Medo.MessageBox.ShowInformation(this, "The new VSUX drive is locked and blank. Click Attach and enter its password, then use Disk Manager to initialize and format the new disk.\n\nKeep the .vsux and .vsux.json files together.");
+                        return;
+                    }
                     try {
                         var newDocument = new Medo.IO.VirtualDisk(fileName);
                         UpdateData(newDocument.FileName);

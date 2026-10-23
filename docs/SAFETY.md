@@ -13,11 +13,13 @@ and change-approval boards.
 2. **Never write to a mounted read-only disk.** A read-only VHD/VHDX/ISO attach never modifies
    the image, not even to replay a pending VHDX log. VSUX must restore its eight-byte signature
    before mounting and mask it after safe detach, including for read-only use; its payload stays read-only.
-3. **Back up before changing in place, and make sure the backup is usable.** Every Maintenance
-   operation that modifies an existing file offers a backup, enabled by default whenever there is
+3. **Back up before changing in place, and make sure the backup is usable.** Maintenance
+   operations that modify an existing file offer a backup, enabled by default whenever there is
    enough free space. The backup is stored plainly (never compressed, encrypted or sparse, whatever the
    folder settings). Its XXH128 checksum must match the source when re-read from disk, bypassing the
-   cache. Windows must also be able to open it as a virtual disk.
+   cache. Windows must also be able to open it as a virtual disk. VSUX soft protection is an
+   exception: its eight-byte signature gate retains recovery diagnostics, not a full backup.
+   Make a full backup before protecting an existing image.
 4. **Refuse rather than guess.** Operations stop when a disk is attached, in use, changed since it
    was selected, protected, or short of space. In every one of these cases nothing is changed.
 5. **Only interrupt what is safe to interrupt.** Compact, convert and backup can be cancelled.
@@ -44,6 +46,7 @@ and change-approval boards.
 ### Maintenance (image files)
 | Operation | Preconditions | Interruptible | After |
 |---|---|---|---|
+| Soft protection (VSUX) | detached standalone dynamic or fixed VHDX, no pending log, new image and companion destinations in the same folder | no | image renamed to `.vsux`, companion committed, signature masked and locked state verified; no full backup is made |
 | Compact | detached, no pending log, dynamic or differencing | yes (documented safe) | file never grows |
 | Resize | detached, no pending log, ≥ smallest safe size, free space for fixed growth | no | size verified |
 | Convert | source detached, chain complete, destination new, free space for the full copy, sector size unchanged | yes, and the partial destination is removed | result size, type and sector size verified, source never modified |
@@ -61,13 +64,21 @@ an access-control boundary against specialists. Only bytes 0–7 are changed by 
 the rest of the image. The image's password verifier and recovery diagnostics live in the
 adjacent `.vsux.json` file, which must travel with it for password-based use.
 
+**New → VSUX (soft protected drive)** creates a blank image, then applies the existing mount lock.
+It starts locked and detached; creation never automatically attaches, initializes or formats it.
+The user must attach with the password before initializing and formatting the new blank disk in
+Disk Manager. Existing image or companion destinations, including directories with those names,
+are refused. If creation fails after files have been created, the error identifies the possible
+temporary VHDX, container and companion paths. They are retained for inspection and recovery;
+the user must not assume the partial result is locked.
+
 | Risk | Safeguard or limit |
 |---|---|
 | Masking a disk while files remain open | Volumes must flush, lock and dismount before detach. Masking needs exclusive file access and validates the VHDX structures. VSUX has no force-detach path. |
 | Wrong password, missing or invalid companion file | Password operations stop before changing the signature. The companion is validated against the image's stable identifier. |
 | First protection loses the password metadata | The companion is committed, flushed and re-read before the first signature change; existing destination files are never overwritten. |
 | Password exposure through service IPC, process arguments or logs | VSUX prompts in its elevated process and does not send passwords to the attach service or put them on the command line or in audit details. |
-| An unattended path bypasses the prompt or changes locked-image metadata | VSUX is excluded from service attach/auto-mount and Maintenance. Use its dedicated Attach and Detach and lock actions. |
+| An unattended path bypasses the prompt or changes locked-image metadata | Protected VSUX containers are excluded from service attach/auto-mount and standard Maintenance operations. Use their dedicated Attach and Detach and lock actions. Initial protection of an ordinary VHDX is available on Maintenance's Soft protection page. |
 | Lost password or companion, or an interrupted signature write | Independent `Recovery\VsuRecover.exe --restore <path>` validates the remaining structures, requires exclusive access and restores only the public eight-byte identifier. It requires no password, companion or saved header snapshot. |
 | Application exit, crash or Windows shutdown while unlocked | Closing VHD Studio does not promise automatic relocking. An interrupted session can leave the normal signature available; check the state and use Detach and lock. |
 | Power loss during a signature write | Eight-byte writes are not guaranteed atomic. Changing the identifier violates the normal VHDX writing rules. Structural checks and recovery reduce mistakes but cannot promise zero corruption risk. Keep a full backup. |

@@ -54,7 +54,12 @@ VHD Studio is developed by **Tobias Gundhus ([xGND Software](https://github.com/
 
 ### VSUX password prompt (experimental)
 
-For a detached VHDX, choose **Maintenance → Protect as VSUX…** and set a password.
+Choose **New → VSUX (soft protected drive)** to create a blank locked image and set its password.
+Click **Attach** and enter the password, then use **Disk Manager** to initialize and format the
+new blank disk. To protect an existing detached standalone VHDX, open **Maintenance**, select
+**Soft protection**, then click **Protect as VSUX…** and set a password. It renames the image to
+`.vsux` in the same folder and creates its `.vsux.json` companion without copying the payload.
+
 Open a `.vsux` file and click **Attach** to enter its password. **Detach & lock** safely
 flushes, locks and dismounts its volumes before restoring the mount lock; open files make it stop.
 These actions request administrator approval and run outside the auto-mount service.
@@ -80,6 +85,7 @@ validation and an exclusive-access check; rename the detached file to `.vhdx` to
 
 | Task | What it does |
 |---|---|
+| **Soft protection** | Protect a detached standalone VHDX as VSUX. Sets a password and masks eight signature bytes; the data stays unencrypted. Keep a full backup separately. |
 | **Compact** | Returns free space to the host. Full (NTFS/ReFS-aware) or zeroed-blocks-only mode for WSL / Docker `ext4.vhdx`, with optional `wsl --shutdown`. Shows the before/after size. |
 | **Resize** | Grow VHD/VHDX, or shrink VHDX down to the smallest safe size. |
 | **Convert** | VHD ↔ VHDX, dynamic ↔ fixed, 512 / 4K logical sectors. The source file is never modified. |
@@ -88,10 +94,11 @@ validation and an exclusive-access check; rename the detached file to `.vhdx` to
 | **Repair** | Replay the VHDX log, fix a broken parent path (`Set-VHD -ParentPath` equivalent), or reset a duplicate disk identifier. |
 | **Details** | Type, virtual / on-disk size, fragmentation, sector sizes, smallest safe size, parent chain. |
 
-Every operation that changes an existing file first shows exactly what will change and makes a
-**verified backup** (checksum re-read from disk) (enabled by default when there is room). It refuses disks that are attached
-or in use, and checks the result afterwards. Long operations show progress, and those that are
-safe to interrupt can be cancelled.
+Maintenance operations that change disk contents or metadata first show exactly what will change and make a
+**verified backup** (checksum re-read from disk) (enabled by default when there is room). They refuse disks that are attached
+or in use, and check the result afterwards. Long operations show progress, and those that are
+safe to interrupt can be cancelled. VSUX soft protection retains recovery diagnostics rather than
+a full backup; make one before protecting an existing image.
 
 ### Disk Manager (DiskPart GUI)
 

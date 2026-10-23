@@ -16,6 +16,7 @@ namespace VhdAttach {
             erpError.SetIconAlignment(btnOK, ErrorIconAlignment.MiddleLeft);
             erpError.SetIconPadding(btnOK, SystemInformation.Border3DSize.Width);
             radFormatVhdX.Enabled = ((Environment.OSVersion.Version.Major * 1000000 + Environment.OSVersion.Version.Minor) >= 6000002); //show if equal to or higher than Windows 8
+            radFormatVsux.Enabled = radFormatVhdX.Enabled;
         }
 
 
@@ -28,6 +29,7 @@ namespace VhdAttach {
             chbThousandSize.Checked = Settings.LastSizeThousandBased;
             radTypeFixed.Checked = Settings.LastSizeFixed;
             radFormatVhdX.Checked = radFormatVhdX.Enabled && Settings.LastSizeVhdX;
+            radFormatVsux.Checked = radFormatVsux.Enabled && Settings.LastSizeVsux;
         }
 
 
@@ -35,16 +37,17 @@ namespace VhdAttach {
             try {
                 this.Cursor = Cursors.WaitCursor;
 
-                var isFormatVhdX = radFormatVhdX.Checked;
+                var isFormatVsux = radFormatVsux.Checked;
+                var isFormatVhdX = radFormatVhdX.Checked || isFormatVsux;
                 var isFormatVhd = !isFormatVhdX;
 
                 var isTypeFixed = radTypeFixed.Checked;
                 var isTypeDynamic = !isTypeFixed;
 
 
-                var filter = isFormatVhdX ? "Virtual disk files (*.vhdx)|*.vhdx|All files (*.*)|*.*" : "Virtual disk files (*.vhd)|*.vhd|All files (*.*)|*.*";
+                var filter = isFormatVsux ? "VSUX soft protected drives (*.vsux)|*.vsux" : isFormatVhdX ? "Virtual disk files (*.vhdx)|*.vhdx|All files (*.*)|*.*" : "Virtual disk files (*.vhd)|*.vhd|All files (*.*)|*.*";
 
-                using (var frm = new SaveFileDialog() { AddExtension = true, AutoUpgradeEnabled = true, Filter = filter, FilterIndex = 0, OverwritePrompt = false, Title = "New disk", ValidateNames = true }) {
+                using (var frm = new SaveFileDialog() { AddExtension = true, AutoUpgradeEnabled = true, Filter = filter, FilterIndex = 1, DefaultExt = isFormatVsux ? "vsux" : isFormatVhdX ? "vhdx" : "vhd", OverwritePrompt = false, Title = "New disk", ValidateNames = true }) {
                     if (frm.ShowDialog(this) == DialogResult.OK) {
                         this.FileName = frm.FileName;
                     } else {
@@ -98,6 +101,13 @@ namespace VhdAttach {
                     }
                 }
 
+                if (isFormatVsux) {
+                    this.Cursor = Cursors.Default;
+                    if (VsuxForm.RunOperation(this, "Create", this.FileName, sizeInBytes: diskSize, fixedSize: isTypeFixed) == DialogResult.OK) {
+                        this.DialogResult = DialogResult.OK;
+                    }
+                    return;
+                }
 
                 try {
                     try {
@@ -140,7 +150,7 @@ namespace VhdAttach {
             var sizeInBytes = GetSizeInBytes();
             txtSizeInBytes.Text = string.Format(CultureInfo.CurrentCulture, "{0:#,##0}", sizeInBytes);
 
-            var sizeInBytesOk = (sizeInBytes >= 8 * 1000 * 1000 / 4096 * 4096);
+            var sizeInBytesOk = (sizeInBytes >= (radFormatVsux.Checked ? 8L * 1024 * 1024 : 8 * 1000 * 1000 / 4096 * 4096));
             if (sizeInBytesOk == false) {
                 erpError.SetError(btnOK, Messages.DiskTooSmall);
             } else {
@@ -148,6 +158,11 @@ namespace VhdAttach {
             }
 
             btnOK.Enabled = sizeInBytesOk;
+        }
+
+        private void format_Changed(object sender, EventArgs e) {
+            lblVsuxHelp.Visible = radFormatVsux.Checked;
+            control_Changed(null, null);
         }
 
         private void txtSize_KeyPress(object sender, KeyPressEventArgs e) {
@@ -222,7 +237,8 @@ namespace VhdAttach {
             Settings.LastSizeUnit = cmbSizeUnit.Text;
             Settings.LastSizeThousandBased = chbThousandSize.Checked;
             Settings.LastSizeFixed = radTypeFixed.Checked;
-            Settings.LastSizeVhdX = radFormatVhdX.Checked;
+            Settings.LastSizeVhdX = radFormatVhdX.Checked || radFormatVsux.Checked;
+            Settings.LastSizeVsux = radFormatVsux.Checked;
         }
 
 

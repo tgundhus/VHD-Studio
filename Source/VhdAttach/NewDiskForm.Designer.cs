@@ -1,4 +1,4 @@
-﻿namespace VhdAttach {
+namespace VhdAttach {
     partial class NewDiskForm {
         /// <summary>
         /// Required designer variable.
@@ -37,6 +37,8 @@
             this.cmbSizeUnit = new System.Windows.Forms.ComboBox();
             this.txtSize = new System.Windows.Forms.TextBox();
             this.grpFormat = new System.Windows.Forms.GroupBox();
+            this.radFormatVsux = new System.Windows.Forms.RadioButton();
+            this.lblVsuxHelp = new System.Windows.Forms.Label();
             this.radFormatVhdX = new System.Windows.Forms.RadioButton();
             this.radFormatVhd = new System.Windows.Forms.RadioButton();
             this.grpType.SuspendLayout();
@@ -56,7 +58,7 @@
             // btnOK
             // 
             this.btnOK.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnOK.Location = new System.Drawing.Point(68, 283);
+            this.btnOK.Location = new System.Drawing.Point(68, 350);
             this.btnOK.Margin = new System.Windows.Forms.Padding(3, 15, 3, 3);
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new System.Drawing.Size(100, 28);
@@ -69,7 +71,7 @@
             // 
             this.btnCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnCancel.Location = new System.Drawing.Point(174, 283);
+            this.btnCancel.Location = new System.Drawing.Point(174, 350);
             this.btnCancel.Margin = new System.Windows.Forms.Padding(3, 15, 3, 3);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(100, 28);
@@ -182,12 +184,34 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.grpFormat.Controls.Add(this.radFormatVhdX);
             this.grpFormat.Controls.Add(this.radFormatVhd);
+            this.grpFormat.Controls.Add(this.radFormatVsux);
+            this.grpFormat.Controls.Add(this.lblVsuxHelp);
             this.grpFormat.Location = new System.Drawing.Point(12, 184);
             this.grpFormat.Name = "grpFormat";
-            this.grpFormat.Size = new System.Drawing.Size(262, 81);
+            this.grpFormat.Size = new System.Drawing.Size(262, 148);
             this.grpFormat.TabIndex = 7;
             this.grpFormat.TabStop = false;
             this.grpFormat.Text = "Format";
+            //
+            // radFormatVsux
+            //
+            this.radFormatVsux.AutoSize = true;
+            this.radFormatVsux.Location = new System.Drawing.Point(9, 81);
+            this.radFormatVsux.Name = "radFormatVsux";
+            this.radFormatVsux.TabIndex = 2;
+            this.radFormatVsux.Text = "&VSUX (soft protected drive)";
+            this.radFormatVsux.AccessibleDescription = "Password prompt on Attach. Disk data stays unencrypted.";
+            this.radFormatVsux.UseVisualStyleBackColor = true;
+            this.radFormatVsux.CheckedChanged += new System.EventHandler(this.format_Changed);
+            //
+            // lblVsuxHelp
+            //
+            this.lblVsuxHelp.AutoSize = true;
+            this.lblVsuxHelp.Location = new System.Drawing.Point(9, 108);
+            this.lblVsuxHelp.MaximumSize = new System.Drawing.Size(244, 0);
+            this.lblVsuxHelp.Name = "lblVsuxHelp";
+            this.lblVsuxHelp.Text = "Password on Attach. Disk data stays unencrypted.";
+            this.lblVsuxHelp.Visible = false;
             // 
             // radFormatVhdX
             // 
@@ -220,7 +244,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.btnCancel;
-            this.ClientSize = new System.Drawing.Size(286, 323);
+            this.ClientSize = new System.Drawing.Size(286, 390);
             this.Controls.Add(this.grpFormat);
             this.Controls.Add(this.txtSize);
             this.Controls.Add(this.cmbSizeUnit);
@@ -269,5 +293,7 @@
         private System.Windows.Forms.GroupBox grpFormat;
         private System.Windows.Forms.RadioButton radFormatVhdX;
         private System.Windows.Forms.RadioButton radFormatVhd;
+        private System.Windows.Forms.RadioButton radFormatVsux;
+        private System.Windows.Forms.Label lblVsuxHelp;
     }
 }

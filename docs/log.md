@@ -75,3 +75,12 @@ Read this when you want to know what changed in the documentation and when. Appe
   `installerOnly` CI mode, covering upgrades from 5.1.0, stuck services, runtime switching and uninstall.
 - Updated the build requirements to Inno Setup 7.1 or newer and documented the pinned, verified CI
   compiler, preventing an older compiler from retaining 5.1.0's previous uninstall callback.
+- Added the 5.1.2 changelog and updated [README.md](../README.md), [VSUX.md](VSUX.md) and
+  [the website](../site/index.html) for **New → VSUX (soft protected drive)** and the visible
+  **Maintenance → Soft protection → Protect as VSUX…** action. Documented the blank locked
+  creation result, first Attach and Disk Manager initialization, same-folder protection of an
+  existing image, and the distinction between VSUX recovery diagnostics and a full backup.
+- Updated [SAFETY.md](SAFETY.md) for the visible Soft protection Maintenance page, its full-backup
+  exception, and new VSUX creation's locked detached result, destination-collision refusal and
+  preservation of partial artifacts. Clarified that protected containers remain excluded from
+  standard Maintenance operations.

@@ -102,6 +102,14 @@ namespace VhdAttachTest {
         }
 
         [TestMethod()]
+        public void Test_PathGuard_AcceptsDriveRootDirectory() {
+            var root = Path.GetPathRoot(Path.GetTempPath());
+            using (var guard = PathGuard.Open(root, directory: true, rejectHardLinks: false)) {
+                Assert.IsTrue(string.Equals(root, guard.FinalPath, StringComparison.OrdinalIgnoreCase), "A drive root must remain fully qualified instead of becoming drive-relative.");
+            }
+        }
+
+        [TestMethod()]
         public void Test_PathGuard_ResolvesShortNamesAndReportsFinalPath() {
             var file = Path.GetTempFileName(); //temp path often contains 8.3 names (e.g. USERNA~1)
             try {

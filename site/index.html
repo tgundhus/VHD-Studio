@@ -346,7 +346,8 @@ footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
       </article>
       <article class="card">
         <h3><span class="n">07</span>VSUX password prompt (experimental)</h3>
-        <p>Choose Maintenance → Protect as VSUX… for a detached standalone VHDX, then enter its password when you click Attach. Detach &amp; lock flushes, locks and dismounts its volumes first; open files stop it. Both actions request administrator approval. VSUX has no auto-mount or Maintenance.</p>
+        <p>Choose New → VSUX (soft protected drive) to create a blank locked image and set its password. Click Attach, enter the password, then use Disk Manager to initialize and format the new blank disk. For an existing detached standalone VHDX, open Maintenance → Soft protection → Protect as VSUX…; it renames the image in the same folder without copying its payload.</p>
+        <p>Detach &amp; lock flushes, locks and dismounts its volumes first; open files stop it. VSUX operations request administrator approval. VSUX has no auto-mount or Maintenance.</p>
         <p>The data stays unencrypted. Only eight signature bytes change, blocking ordinary mounting while locked, including on another PC. Specialists can bypass the lock. Keep the .vsux.json companion beside the image; an interrupted session can leave it unlocked, and power loss during a signature write carries risk.</p>
         <p>Both installers include the independent, self-contained VsuRecover.exe. It validates a detached image and restores only the eight signature bytes without a password or companion file. <a href="https://github.com/tgundhus/VHD-Studio/blob/master/docs/VSUX.md">Read the usage and recovery guide</a>.</p>
       </article>
@@ -362,7 +363,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
     <div class="figs">
       <figure>
         <div class="shot"><img src="images/maintenance.png" width="886" height="613" loading="lazy" alt="Maintenance window with options to compact, resize, convert, create a differencing disk, merge and repair a VHDX"></div>
-        <figcaption><b>Maintenance.</b> Compact, resize, convert, merge, repair and inspect a disk. Every in-place change makes a verified backup first.</figcaption>
+        <figcaption><b>Maintenance.</b> Compact, resize, convert, merge, repair and inspect a disk. Changes to disk contents or metadata offer a verified backup first. VSUX soft protection keeps recovery diagnostics; keep a full backup separately.</figcaption>
       </figure>
       <figure>
         <div class="shot"><img src="images/disk-manager.png" width="986" height="633" loading="lazy" alt="Disk Manager listing disks, partitions and volumes, with virtual disks highlighted next to their backing files"></div>

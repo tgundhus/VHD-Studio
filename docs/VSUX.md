@@ -7,11 +7,28 @@ BitLocker-equivalent protection.
 
 ## Create a VSUX image
 
+1. Click **New** and select **VSUX (soft protected drive)**, the size and dynamic or fixed type.
+2. Click **Create** and choose a new `.vsux` filename on a local physical drive.
+3. Approve elevation if requested, then enter and confirm the password.
+
+Creation produces a blank, locked, detached image and its `.vsux.json` companion. It does not
+automatically attach or initialize the disk. Click **Attach**, enter the password, then use
+**Disk Manager** to initialize the new blank disk and create and format a partition before
+storing files. When finished, use **Detach & lock**.
+
+## Protect an existing VHDX
+
 Start with a full backup and a detached standalone VHDX on a local physical drive. Open it
-in VHD Studio, then choose **Maintenance → Protect as VSUX…**. Choose a new `.vsux` filename
-in the same folder, confirm the rename, approve elevation if requested, and enter and confirm
-the password. Protection renames the image without copying its payload and creates its
-`.vsux.json` companion before masking the signature. Existing target files are refused.
+in VHD Studio, then open **Maintenance**, select **Soft protection** in the left sidebar and
+click **Protect as VSUX…**. The command is also available from the main window's Maintenance
+dropdown. Choose a new `.vsux` filename in the same folder, confirm the rename, approve
+elevation if requested, and enter and confirm the password.
+
+Protection accepts dynamic or fixed standalone VHDX images without a pending log. It renames
+the image without copying its payload and creates its `.vsux.json` companion before masking
+the signature. The main window then opens the renamed VSUX image. Existing target images and
+companions are refused. Soft protection retains recovery diagnostics rather than making a
+full backup.
 
 ## Attach and detach
 

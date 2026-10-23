@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -15,19 +16,24 @@ namespace VhdAttach {
         private readonly string FilePath;
         private readonly bool ReadOnly;
         private readonly string Destination;
+        private readonly long SizeInBytes;
+        private readonly bool FixedSize;
         private readonly Label StatusLabel;
         private bool IsBusy;
 
-        public VsuxForm(string operation, string path, bool readOnly = false, string destination = null) {
+        public VsuxForm(string operation, string path, bool readOnly = false, string destination = null, long sizeInBytes = 0, bool fixedSize = false) {
             if (!string.Equals(operation, "Attach", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(operation, "Lock", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(operation, "Protect", StringComparison.OrdinalIgnoreCase)) {
+                && !string.Equals(operation, "Protect", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(operation, "Create", StringComparison.OrdinalIgnoreCase)) {
                 throw new ArgumentException("Unknown VSUX operation.", nameof(operation));
             }
             this.Operation = operation.ToLowerInvariant();
             this.FilePath = Path.GetFullPath(path);
             this.ReadOnly = readOnly;
             this.Destination = destination == null ? null : Path.GetFullPath(destination);
+            this.SizeInBytes = sizeInBytes;
+            this.FixedSize = fixedSize;
             this.Font = SystemFonts.MessageBoxFont;
             this.Icon = Ui.AppIcon;
             this.Text = this.ActionTitle + " - " + Branding.ProductName;
@@ -51,10 +57,10 @@ namespace VhdAttach {
             this.FormClosing += (s, e) => { if (this.IsBusy) { e.Cancel = true; } };
         }
 
-        private string ActionTitle => this.Operation == "protect" ? "Protect as VSUX" : this.Operation == "lock" ? "Detach & lock" : this.ReadOnly ? "Attach read-only" : "Attach";
+        private string ActionTitle => this.Operation == "create" ? "Create VSUX" : this.Operation == "protect" ? "Protect as VSUX" : this.Operation == "lock" ? "Detach & lock" : this.ReadOnly ? "Attach read-only" : "Attach";
 
-        public static DialogResult RunOperation(IWin32Window owner, string operation, string path, bool readOnly = false, string destination = null) {
-            using (var form = new VsuxForm(operation, path, readOnly, destination)) { return form.ShowDialog(owner); }
+        public static DialogResult RunOperation(IWin32Window owner, string operation, string path, bool readOnly = false, string destination = null, long sizeInBytes = 0, bool fixedSize = false) {
+            using (var form = new VsuxForm(operation, path, readOnly, destination, sizeInBytes, fixedSize)) { return form.ShowDialog(owner); }
         }
 
         private async Task ExecuteAsync() {
@@ -63,9 +69,13 @@ namespace VhdAttach {
             try {
                 if (!Ui.IsElevated) {
                     this.StatusLabel.Text = "Waiting for administrator approval and the VSUX operation…";
-                    var arguments = "/Vsux" + (this.Operation == "lock" ? "Lock" : this.Operation == "protect" ? "Protect" : "Attach") + " " + Ui.Quote(this.FilePath);
+                    var arguments = "/Vsux" + (this.Operation == "create" ? "Create" : this.Operation == "lock" ? "Lock" : this.Operation == "protect" ? "Protect" : "Attach") + " " + Ui.Quote(this.FilePath);
                     if (this.Destination != null) { arguments += " " + Ui.Quote(this.Destination); }
                     if (this.ReadOnly) { arguments += " /readonly"; }
+                    if (this.Operation == "create") {
+                        arguments += " /size=" + this.SizeInBytes.ToString(CultureInfo.InvariantCulture);
+                        if (this.FixedSize) { arguments += " /fixed"; }
+                    }
                     var startInfo = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, Branding.ApplicationExe), arguments) { UseShellExecute = true, Verb = "runas" };
                     using (var process = Process.Start(startInfo)) {
                         if (process == null) { throw new InvalidOperationException("The VSUX operation could not start."); }
@@ -73,10 +83,11 @@ namespace VhdAttach {
                         result = process.ExitCode == 0 ? DialogResult.OK : process.ExitCode == 2 ? DialogResult.Cancel : DialogResult.Abort;
                     }
                 } else {
-                    using (var password = new VsuxPasswordForm(this.Destination ?? this.FilePath, this.Operation == "protect", this.ActionTitle)) {
+                    using (var password = new VsuxPasswordForm(this.Destination ?? this.FilePath, this.Operation == "protect" || this.Operation == "create", this.ActionTitle)) {
                         if (password.ShowDialog(this) == DialogResult.OK) {
                             var secret = password.Password;
                             this.StatusLabel.Text = this.Operation == "lock" ? "Safely detaching, then locking… Close files on the drive if it is busy."
+                                : this.Operation == "create" ? "Creating the blank disk and applying its mount lock…"
                                 : this.Operation == "protect" ? "Checking the detached image and creating its mount lock…"
                                 : "Checking the password and attaching the drive…";
                             try {
@@ -85,6 +96,7 @@ namespace VhdAttach {
                                     AuditLog.Started(auditOperation, this.FilePath, this.Destination);
                                     try {
                                         switch (this.Operation) {
+                                            case "create": VsuxCreation.Create(this.FilePath, this.SizeInBytes, this.FixedSize, secret); break;
                                             case "protect": VsuxOperations.Protect(this.FilePath, this.Destination, secret); break;
                                             case "lock": VsuxOperations.Lock(this.FilePath, secret); break;
                                             default: VsuxOperations.Attach(this.FilePath, secret, this.ReadOnly); break;

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -52,7 +54,12 @@ namespace VhdAttach {
                         Environment.ExitCode = 1;
                         return;
                     }
-                    Application.Run(new MaintenanceForm(maintainFiles[0].TrimEnd('\"'), Medo.Application.Args.Current.GetValue("Task", null)) { StartPosition = FormStartPosition.CenterScreen });
+                    using (var form = new MaintenanceForm(maintainFiles[0].TrimEnd('\"'), Medo.Application.Args.Current.GetValue("Task", null)) { StartPosition = FormStartPosition.CenterScreen }) {
+                        Application.Run(form);
+                        if (form.ProtectedFileName != null) {
+                            Process.Start(new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory, VhdAttachCommon.Branding.ApplicationExe), Ui.Quote(form.ProtectedFileName)) { UseShellExecute = true });
+                        }
+                    }
                     return;
                 }
 
@@ -111,7 +118,7 @@ namespace VhdAttach {
 
         private static bool TryRunVsuxOperation() {
             string operation = null;
-            foreach (var name in new[] { "Attach", "Lock", "Protect" }) {
+            foreach (var name in new[] { "Attach", "Lock", "Protect", "Create" }) {
                 if (!Medo.Application.Args.Current.ContainsKey("Vsux" + name)) { continue; }
                 if (operation != null) {
                     Medo.MessageBox.ShowError(null, "Specify only one VSUX operation.");
@@ -127,8 +134,16 @@ namespace VhdAttach {
                 Environment.ExitCode = 1;
                 return true;
             }
+            long sizeInBytes = 0;
+            if (operation == "Create" && (!long.TryParse(Medo.Application.Args.Current.GetValue("size", ""), NumberStyles.None, CultureInfo.InvariantCulture, out sizeInBytes)
+                || sizeInBytes < 8L * 1024 * 1024 || sizeInBytes % 4096 != 0)) {
+                Medo.MessageBox.ShowError(null, "Specify a VSUX size in bytes, at least 8 MiB and aligned to 4096 bytes.");
+                Environment.ExitCode = 1;
+                return true;
+            }
             var result = VsuxForm.RunOperation(null, operation, files[0].TrimEnd('\"'),
-                Medo.Application.Args.Current.ContainsKey("readonly"), operation == "Protect" ? files[1].TrimEnd('\"') : null);
+                Medo.Application.Args.Current.ContainsKey("readonly"), operation == "Protect" ? files[1].TrimEnd('\"') : null,
+                sizeInBytes, Medo.Application.Args.Current.ContainsKey("fixed"));
             Environment.ExitCode = result == DialogResult.OK ? 0 : result == DialogResult.Cancel ? 2 : 1;
             return true;
         }

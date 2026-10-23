@@ -1,5 +1,18 @@
 # Changelog
 
+## 5.1.2
+
+### Improved
+- **New → VSUX (soft protected drive)** creates a blank, locked `.vsux` image and its
+  `.vsux.json` companion, with password setup during creation. Click **Attach** and enter the
+  password, then use **Disk Manager** to initialize and format the new blank disk.
+- The **Maintenance** window now has a visible **Soft protection** page with **Protect as VSUX…**
+  for an existing detached standalone VHDX. After protection, the main window opens the renamed
+  VSUX image. Existing files and companions are never overwritten.
+- Both entry points explain that VSUX leaves the data unencrypted and deters ordinary mounting;
+  specialists and the independent recovery tool can bypass the password. **Detach & lock** and
+  standalone eight-byte recovery remain available.
+
 ## 5.1.1
 
 ### Fixed

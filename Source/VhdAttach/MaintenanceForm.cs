@@ -18,7 +18,9 @@ namespace VhdAttach {
     /// </summary>
     internal sealed class MaintenanceForm : Form {
 
-        public static readonly string[] TaskNames = { "Details", "Compact", "Resize", "Convert", "Differencing", "Merge", "Repair" };
+        public static readonly string[] TaskNames = { "Details", "Soft protection", "Compact", "Resize", "Convert", "Differencing", "Merge", "Repair" };
+
+        public string ProtectedFileName { get; private set; }
 
         private readonly string FileName;
         private VirtualDiskDetails Details;
@@ -41,7 +43,7 @@ namespace VhdAttach {
 
             var banner = new Ui.Banner("Maintenance", this.FileName) { Font = this.Font };
 
-            this.TaskList = new ListBox { Dock = DockStyle.Left, Width = this.Font.Height * 11, IntegralHeight = false, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = (int)(this.Font.Height * 2.2), BorderStyle = BorderStyle.None, BackColor = Ui.AccentSoft };
+            this.TaskList = new ListBox { Dock = DockStyle.Left, Width = this.Font.Height * 11, IntegralHeight = false, DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = (int)(this.Font.Height * 2.2), BorderStyle = BorderStyle.None, BackColor = Ui.AccentSoft, AccessibleName = "Maintenance tasks" };
             this.TaskList.Items.AddRange(TaskNames.Cast<object>().ToArray());
             this.TaskList.DrawItem += this.TaskList_DrawItem;
             this.TaskList.SelectedIndexChanged += (s, e) => { this.ReloadDetails(); this.ShowTask(this.TaskList.SelectedItem as string); };
@@ -101,6 +103,7 @@ namespace VhdAttach {
 
             switch (task) {
                 case "Details": this.BuildDetails(flow); break;
+                case "Soft protection": this.BuildSoftProtection(flow); break;
                 case "Compact": this.BuildCompact(flow); break;
                 case "Resize": this.BuildResize(flow); break;
                 case "Convert": this.BuildConvert(flow); break;
@@ -108,7 +111,7 @@ namespace VhdAttach {
                 case "Merge": this.BuildMerge(flow); break;
                 case "Repair": this.BuildRepair(flow); break;
             }
-            if (!Ui.IsElevated && (task != "Details")) {
+            if (!Ui.IsElevated && (task != "Details") && (task != "Soft protection")) {
                 var elevate = this.AddButton(flow, "Restart as administrator", Ui.Glyph.Shield);
                 elevate.Click += (s, e) => this.Elevate(task);
                 this.AddParagraph(flow, "Maintenance operations require administrator rights.", Ui.Muted);
@@ -143,6 +146,70 @@ namespace VhdAttach {
             flow.Controls.Add(table);
             var refresh = this.AddButton(flow, "Refresh", Ui.Glyph.Refresh);
             refresh.Click += (s, e) => { this.ReloadDetails(); this.ShowTask("Details"); };
+        }
+
+        private bool CanProtectVsux() {
+            return !this.IsBusy
+                && string.Equals(Path.GetExtension(this.FileName), ".vhdx", StringComparison.OrdinalIgnoreCase)
+                && this.Details != null && this.Details.Format == "VHDX"
+                && (this.Details.Kind == VirtualDiskKind.Fixed || this.Details.Kind == VirtualDiskKind.Dynamic)
+                && this.Details.AttachedPath == null && !this.Details.NeedsLogReplay;
+        }
+
+        private void BuildSoftProtection(FlowLayoutPanel flow) {
+            this.AddHeading(flow, "Soft protection (VSUX)");
+            this.AddParagraph(flow, "Create a soft protected drive that asks for a password when you click Attach in VHD Studio. Ordinary virtual disk tools cannot open it while locked.");
+            this.AddParagraph(flow, "The disk data stays unencrypted. Specialists and the standalone recovery tool can restore access without the password.", Ui.Muted);
+            this.AddParagraph(flow, "Protection renames this detached VHDX to .vsux, creates its companion .vsux.json file, and changes only the eight signature bytes. Keep both files together when moving the drive to another PC.");
+            this.AddParagraph(flow, "Use Detach && lock in VHD Studio when finished. It flushes and safely detaches the drive before locking, and refuses while files are open.");
+            var run = this.AddButton(flow, "&Protect as VSUX…", Ui.Glyph.Shield);
+            run.Name = "ProtectVsuxButton";
+            run.AccessibleName = "Protect as VSUX (soft protected drive)";
+            run.Enabled = this.CanProtectVsux();
+            if (!run.Enabled) {
+                this.AddParagraph(flow, "Choose a detached, standalone VHDX with no pending log to enable protection. Detach an attached image first; convert VHD files to VHDX.", Ui.Muted);
+            }
+            run.Click += (s, e) => this.ProtectVsux();
+        }
+
+        private void ProtectVsux() {
+            if (this.IsBusy) { return; }
+            this.ReloadDetails();
+            if (!this.CanProtectVsux()) { this.ShowTask("Soft protection"); return; }
+            using (var target = new SaveFileDialog {
+                Title = "Protect as VSUX in the same folder", Filter = "VSUX files (*.vsux)|*.vsux", DefaultExt = "vsux", AddExtension = true,
+                FileName = Path.GetFileNameWithoutExtension(this.FileName) + ".vsux", InitialDirectory = Path.GetDirectoryName(this.FileName), OverwritePrompt = false
+            }) {
+                if (target.ShowDialog(this) != DialogResult.OK) { return; }
+                if (!string.Equals(Path.GetDirectoryName(this.FileName), Path.GetDirectoryName(Path.GetFullPath(target.FileName)), StringComparison.OrdinalIgnoreCase)) {
+                    Medo.MessageBox.ShowWarning(this, "Save the VSUX file in the same folder as the source VHDX image.");
+                    return;
+                }
+                if (File.Exists(target.FileName) || Directory.Exists(target.FileName) || File.Exists(target.FileName + ".json") || Directory.Exists(target.FileName + ".json")) {
+                    Medo.MessageBox.ShowWarning(this, "The destination or its companion file already exists. Choose a new name.");
+                    return;
+                }
+                if (Medo.MessageBox.ShowQuestion(this, "This renames the detached VHDX to .vsux and creates a companion .vsux.json file. Only the eight signature bytes change; the disk data stays unencrypted.\n\nKeep both files together. Standalone recovery can restore access without the password. Continue?", MessageBoxButtons.YesNo) != DialogResult.Yes) { return; }
+                this.IsBusy = true;
+                this.Page.Enabled = false;
+                this.TaskList.Enabled = false;
+                try {
+                    if (VsuxForm.RunOperation(this, "Protect", this.FileName, destination: target.FileName) == DialogResult.OK) {
+                        this.ProtectedFileName = target.FileName;
+                        this.IsBusy = false;
+                        this.DialogResult = DialogResult.OK;
+                        this.Close();
+                    }
+                } finally {
+                    this.IsBusy = false;
+                    if (this.ProtectedFileName == null && !this.IsDisposed) {
+                        this.Page.Enabled = true;
+                        this.TaskList.Enabled = true;
+                        this.ReloadDetails();
+                        this.ShowTask("Soft protection");
+                    }
+                }
+            }
         }
 
         private void BuildCompact(FlowLayoutPanel flow) {
@@ -646,7 +713,7 @@ namespace VhdAttach {
             using (var back = new SolidBrush(selected ? Ui.Accent : Ui.AccentSoft)) { e.Graphics.FillRectangle(back, e.Bounds); }
             var task = (string)this.TaskList.Items[e.Index];
             var glyph = task switch {
-                "Details" => Ui.Glyph.Info, "Compact" => Ui.Glyph.Compact, "Resize" => Ui.Glyph.Resize, "Convert" => Ui.Glyph.Convert,
+                "Details" => Ui.Glyph.Info, "Soft protection" => Ui.Glyph.Shield, "Compact" => Ui.Glyph.Compact, "Resize" => Ui.Glyph.Resize, "Convert" => Ui.Glyph.Convert,
                 "Differencing" => Ui.Glyph.Branch, "Merge" => Ui.Glyph.Merge, _ => Ui.Glyph.Repair,
             };
             var size = Ui.ScaledIconSize(this);

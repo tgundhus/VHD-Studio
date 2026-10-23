@@ -31,7 +31,7 @@ namespace VhdAttachCommon {
         /// <param name="rejectHardLinks">Refuse files with more than one hard link (a link can point at someone else's data).</param>
         public static PathGuard Open(string path, bool directory, bool rejectHardLinks) {
             if (!Path.IsPathFullyQualified(path)) { throw new ArgumentException(string.Format("\"{0}\" is not a full path.", path)); }
-            var fullPath = GetLongPath(Path.GetFullPath(path)).TrimEnd('\\');
+            var fullPath = Path.TrimEndingDirectorySeparator(GetLongPath(Path.GetFullPath(path)));
             EnsureNoReparsePoints(fullPath, includeLast: true);
 
             var flags = NativeMethods.FILE_FLAG_OPEN_REPARSE_POINT | (directory ? NativeMethods.FILE_FLAG_BACKUP_SEMANTICS : 0);
@@ -50,7 +50,7 @@ namespace VhdAttachCommon {
                 if (!directory && rejectHardLinks && (info.NumberOfLinks > 1)) { throw new UnauthorizedAccessException(string.Format("\"{0}\" has multiple hard links and cannot be used.", path)); }
 
                 var finalPath = GetFinalPath(handle);
-                if (!string.Equals(finalPath.TrimEnd('\\'), fullPath, StringComparison.OrdinalIgnoreCase)) {
+                if (!string.Equals(Path.TrimEndingDirectorySeparator(finalPath), fullPath, StringComparison.OrdinalIgnoreCase)) {
                     throw new UnauthorizedAccessException(string.Format("\"{0}\" resolves to a different location (\"{1}\").", path, finalPath));
                 }
                 return new PathGuard(handle, finalPath);

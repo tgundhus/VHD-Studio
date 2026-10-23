@@ -1,7 +1,7 @@
 using VhdStudio.Vsux;
 
 if (args is not ["--restore", var path]) {
-    Console.WriteLine("VsuRecover --restore <image.vsux-or-vhdx>\nRestores only the eight-byte VHDX signature after structural and exclusive-access checks.\nNo password, companion file, VSU installation, mounting or header snapshot is used.");
+    Console.WriteLine("VsuRecover --restore <image.vsux-or-vhdx>\nRestores only the eight-byte VHDX signature after structural and exclusive-access checks.\nNo password, recovery file, VHD Studio installation, mounting or header snapshot is used.");
     return args is ["--help"] ? 0 : 2;
 }
 try {

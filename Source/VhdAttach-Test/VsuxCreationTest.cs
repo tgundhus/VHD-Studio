@@ -195,6 +195,7 @@ namespace VhdAttachTest {
                         var observed = false;
                         var masked = false;
                         var emptyBeforePrompt = false;
+                        var onlyPasswordVisible = false;
                         var timedOut = false;
                         var elapsed = Stopwatch.StartNew();
                         timer.Tick += (sender, args) => {
@@ -204,6 +205,7 @@ namespace VhdAttachTest {
                                 observed = true;
                                 masked = ((TextBox)password.GetType().GetField("PasswordBox", PrivateInstance).GetValue(password)).UseSystemPasswordChar;
                                 emptyBeforePrompt = Directory.GetFiles(this.Folder).Length == 0;
+                                onlyPasswordVisible = form.Opacity == 0 && !form.ShowInTaskbar && password.Visible && password.Opacity > 0;
                                 password.DialogResult = DialogResult.Cancel;
                             }
                             if (elapsed.Elapsed < TimeSpan.FromSeconds(10)) { return; }
@@ -219,6 +221,7 @@ namespace VhdAttachTest {
                         Assert.IsTrue(observed, "VSUX creation did not ask for a password.");
                         Assert.IsTrue(masked);
                         Assert.IsTrue(emptyBeforePrompt, "VSUX creation wrote files before the password was accepted.");
+                        Assert.IsTrue(onlyPasswordVisible, "Creation must show its password prompt without an extra progress window behind it.");
                         Assert.AreEqual(DialogResult.Cancel, result);
                     }
                 });

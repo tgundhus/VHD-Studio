@@ -19,7 +19,7 @@ internal static class Program {
                 var password = ReadPassword("New password: ");
                 if (password != ReadPassword("Confirm password: ")) { throw new ArgumentException("Passwords do not match."); }
                 PrototypeOperations.Protect(source, target, password);
-                Console.WriteLine("Protected as a single-file VSUX. Password information is stored in VHDX metadata; no JSON companion is needed. Data is not encrypted.");
+                Console.WriteLine("Protected as a single-file VSUX. Password information is stored inside this file. Data is not encrypted.");
                 return 0;
             }
             if (args.Length is 2 or 3 && args[0] is "attach" or "unlock" or "lock") {

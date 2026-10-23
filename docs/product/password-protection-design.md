@@ -12,10 +12,12 @@ links: [../SAFETY.md, ../VSUX.md]
 # Password-protected virtual disks
 
 ## Summary
-VHD Studio 5.1.0 ships the experimental [VSUX mount lock](../VSUX.md) for a revised requirement:
+VHD Studio ships the experimental [VSUX mount lock](../VSUX.md) for a revised requirement:
 leave the data unencrypted while preventing ordinary users and generic tools from mounting a locked
 image, including on another PC. The maintainer explicitly accepted that specialists can bypass it.
-VSUX changes only the eight VHDX signature bytes and uses an adjacent password-verifier companion.
+VSUX's raw lock changes only the eight VHDX signature bytes. Current images store their password
+information inside the VHDX; initial protection, explicit upgrades and conversion back also update
+VHDX metadata. Earlier images need their original recovery file until explicitly upgraded.
 Attach prompts for the password; Detach & lock safely detaches first. Independent recovery restores
 the public signature without a password. This is a convenience barrier, not confidentiality.
 

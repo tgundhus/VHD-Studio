@@ -48,6 +48,10 @@ namespace VhdAttach {
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
+            // Keep the modal wait alive without duplicating the helper or password window.
+            // Hide() would end ShowDialog before the operation has finished.
+            this.Opacity = 0;
+            this.ShowInTaskbar = false;
             this.ClientSize = new Size(this.Font.Height * 35, this.Font.Height * 9);
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(this.Font.Height), ColumnCount = 1, RowCount = 3 };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -65,12 +69,27 @@ namespace VhdAttach {
 
         private string ActionTitle => this.Operation switch {
             "create" => "Create VSUX", "createdisk" => "Create virtual disk", "protect" => "Protect as VSUX", "lock" => "Detach & lock",
-            "portable" => "Make self-contained", "convert" => "Convert back to VHDX", "backup" => "Export recovery information",
+            "portable" => "Make self-contained", "convert" => "Convert back to VHDX", "backup" => "Export recovery file",
             _ => this.ReadOnly ? "Attach read-only" : "Attach"
         };
 
         public static DialogResult RunOperation(IWin32Window owner, string operation, string path, bool readOnly = false, string destination = null, long sizeInBytes = 0, bool fixedSize = false, bool createSinglePartition = false) {
-            using (var form = new VsuxForm(operation, path, readOnly, destination, sizeInBytes, fixedSize, createSinglePartition)) { return form.ShowDialog(owner); }
+            var ownerForm = owner is Form candidate && candidate is not MainForm ? candidate : null;
+            var ownerOpacity = ownerForm?.Opacity ?? 1;
+            var ownerTaskbar = ownerForm?.ShowInTaskbar ?? false;
+            try {
+                if (ownerForm != null) {
+                    ownerForm.Opacity = 0;
+                    ownerForm.ShowInTaskbar = false;
+                }
+                using (var form = new VsuxForm(operation, path, readOnly, destination, sizeInBytes, fixedSize, createSinglePartition)) { return form.ShowDialog(owner); }
+            } finally {
+                if (ownerForm != null && !ownerForm.IsDisposed) {
+                    ownerForm.Opacity = ownerOpacity;
+                    ownerForm.ShowInTaskbar = ownerTaskbar;
+                    ownerForm.Activate();
+                }
+            }
         }
 
         private async Task ExecuteAsync() {
@@ -93,11 +112,12 @@ namespace VhdAttach {
                         await process.WaitForExitAsync();
                         result = process.ExitCode == 0 ? DialogResult.OK : process.ExitCode == 2 ? DialogResult.Cancel : DialogResult.Abort;
                     }
-                } else if (this.Operation == "backup" || this.Operation == "createdisk") {
+                } else if (this.Operation == "backup" || this.Operation == "createdisk"
+                    || (this.Operation == "lock" && VsuxOperations.HasUnlockSession(this.FilePath))) {
                     await this.RunWorkerAsync(null);
                     result = DialogResult.OK;
                 } else {
-                    using (var password = new VsuxPasswordForm(this.Operation == "protect" ? this.Destination : this.FilePath, this.Operation == "protect" || this.Operation == "create", this.ActionTitle)) {
+                    using (var password = new VsuxPasswordForm(this.Operation == "protect" ? this.Destination : this.FilePath, this.Operation == "protect" || this.Operation == "create", this.ActionTitle, acceptText: this.Operation == "convert" ? "&OK" : null) { ShowInTaskbar = true }) {
                         if (password.ShowDialog(this) == DialogResult.OK) {
                             var secret = password.Password;
                             try {
@@ -110,6 +130,9 @@ namespace VhdAttach {
             } catch (Win32Exception ex) when (ex.NativeErrorCode == 1223) {
                 result = DialogResult.Cancel;
             } catch (Exception ex) {
+                this.Opacity = 1;
+                this.ShowInTaskbar = true;
+                this.Activate();
                 var message = ex.Message;
                 var statusPath = this.Destination ?? this.FilePath;
                 if (File.Exists(statusPath)) {
@@ -133,9 +156,12 @@ namespace VhdAttach {
                 "protect" => "Checking the detached image and storing its password information…",
                 "portable" => "Checking the password and storing its information inside the detached drive…",
                 "convert" => "Checking the password and converting the detached image back to VHDX…",
-                "backup" => "Exporting optional recovery information…",
+                "backup" => "Exporting the optional recovery file…",
                 _ => "Checking the password and attaching the drive…"
             };
+            this.Opacity = 1;
+            this.ShowInTaskbar = true;
+            this.Activate();
             await Task.Run(() => {
                 var auditOperation = this.Operation == "createdisk" ? this.ActionTitle : "VSUX " + this.ActionTitle;
                 AuditLog.Started(auditOperation, this.FilePath, this.Destination);
@@ -144,7 +170,10 @@ namespace VhdAttach {
                         case "create": VsuxCreation.Create(this.FilePath, this.SizeInBytes, this.FixedSize, secret, this.CreateSinglePartition); break;
                         case "createdisk": NewDiskCreation.Create(this.FilePath, this.SizeInBytes, this.FixedSize, this.CreateSinglePartition); break;
                         case "protect": VsuxOperations.Protect(this.FilePath, this.Destination, secret); break;
-                        case "lock": VsuxOperations.Lock(this.FilePath, secret); break;
+                        case "lock":
+                            if (secret == null) { VsuxOperations.LockUsingSession(this.FilePath); }
+                            else { VsuxOperations.Lock(this.FilePath, secret); }
+                            break;
                         case "portable": VsuxOperations.MakeSelfContained(this.FilePath, secret); break;
                         case "convert": VsuxOperations.ConvertToVhdx(this.FilePath, this.Destination, secret); break;
                         case "backup": VsuxOperations.ExportRecoveryBackup(this.FilePath, this.Destination); break;

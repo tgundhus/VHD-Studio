@@ -62,21 +62,26 @@ Click **Attach** and enter the password to use its prepared volume. If Attach su
 Explorer shows no drive, **Drive → Disk Manager…**
 opens the attached disk in Disk Manager for explicit partition, format and drive-letter actions.
 To protect an existing detached standalone VHDX, open **Maintenance**, select
-**Soft protection**, then click **Protect as VSUX…** and set a password. It renames the image to
+**Soft protection**, then click **Protect as VSUX…** and set a password. It changes the extension to
 `.vsux` in the same folder without copying the payload. New VSUX images store their password
-information inside the file: no JSON companion is needed, including on another PC.
+information inside the file, including when you move it to another PC.
 
 Open a `.vsux` file and click **Attach** to enter its password. **Detach & lock** safely
 flushes, locks and dismounts its volumes before restoring the mount lock; open files make it stop.
+After a successful Attach, a temporary Windows-protected unlock session lets you relock without
+entering the password again. It is removed after confirmed lock or successful conversion back to
+VHDX, and kept if safe relock fails.
 These actions request administrator approval and run outside the auto-mount service.
 
 For an existing VSUX, open **Soft protection** from the toolbar to convert a legacy image to the
-single-file format, export optional recovery information, or **Convert back to VHDX…**. Conversion
-requires the password and a detached disk, removes the VSUX password metadata and renames the
-file in the same folder without copying its payload. Existing destination files are never replaced.
-Older VSUX images still need their `.vsux.json` companion until explicitly upgraded; keep that
-file as a backup after the upgrade. Optional recovery exports contain diagnostics, without a
-password verifier. An unrelated adjacent JSON file is left untouched when protecting a new image.
+single-file format, **Export recovery file…**, or **Convert back to VHDX…**. Conversion needs a
+detached disk: enter the password and click **OK**. It removes the VSUX password metadata and
+changes the file's extension to `.vhdx` in the same folder without copying its payload. Existing
+destination files are never replaced: protection and conversion report **File already exists**
+when the corresponding filename is taken. Older VSUX images still need their original recovery file
+until explicitly upgraded; that file is kept after the upgrade. Optional recovery files contain
+diagnostics, without a password verifier. Existing recovery files are left untouched when protecting
+a new image.
 
 VSUX keeps the data **unencrypted**. Its lock changes only the eight-byte VHDX signature, so
 ordinary VHDX mounting is blocked while locked, including on another PC. This is a convenience
@@ -92,10 +97,10 @@ Setup includes an independent, self-contained recovery tool:
 & "$env:ProgramFiles\VHD Studio\Recovery\VsuRecover.exe" --restore "D:\Disks\disk.vsux"
 ```
 
-Recovery needs no password or companion file. It restores only the eight signature bytes after
+Recovery needs no password or recovery file. It restores only the eight signature bytes after
 validation and an exclusive-access check; rename the detached file to `.vhdx` to use it normally.
 Use **Convert back to VHDX…** when the password is available to remove the embedded VSUX
-metadata too. A recovery-information JSON export is optional and is not a full backup.
+metadata too. An exported recovery file is optional and is not a full backup.
 
 ### Maintenance (no Hyper-V required)
 

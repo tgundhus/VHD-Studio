@@ -11,7 +11,7 @@ namespace VhdAttach {
 
         public string Password => this.PasswordBox.Text;
 
-        public VsuxPasswordForm(string path, bool create, string action) {
+        public VsuxPasswordForm(string path, bool create, string action, string acceptText = null) {
             this.Text = create ? "Set VSUX password" : action + " - VSUX drive";
             this.Font = SystemFonts.MessageBoxFont;
             this.Icon = Ui.AppIcon;
@@ -47,14 +47,14 @@ namespace VhdAttach {
             layout.Controls.Add(showPassword);
             layout.Controls.Add(new Label {
                 Text = create
-                    ? "Use at least 8 characters. The password information stays inside the drive; no JSON companion is required. This mount lock leaves the data unencrypted."
+                    ? "Use at least 8 characters. Password information is stored inside this file. This mount lock leaves the data unencrypted."
                     : "VSUX uses a mount lock. The disk data remains unencrypted.",
                 AutoSize = true, MaximumSize = new Size(width, 0), Margin = new Padding(0, 0, 0, 12)
             });
             layout.Controls.Add(this.ErrorLabel);
             var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Margin = new Padding(0, 8, 0, 0) };
             var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true, MinimumSize = new Size(90, 30) };
-            var accept = new Button { Text = create ? "Create &lock" : "&" + action.Replace("&", "&&"), AutoSize = true, MinimumSize = new Size(110, 30) };
+            var accept = new Button { Text = acceptText ?? (create ? "Create &lock" : "&" + action.Replace("&", "&&")), AutoSize = true, MinimumSize = new Size(110, 30) };
             accept.Click += (s, e) => {
                 if (this.PasswordBox.Text.Length < (create ? 8 : 1)) {
                     this.ErrorLabel.Text = create ? "Enter a password with at least 8 characters." : "Enter the drive password.";

@@ -82,7 +82,7 @@ namespace VhdAttach {
             foreach (ToolStripItem item in this.mnuMaintenance.DropDownItems) { this.StandardMaintenanceItems.Add(item); }
             this.mnuVsuxConvert = new ToolStripMenuItem("Convert back to VHDX…", null, (s, e) => this.OpenVsuxTools("Convert")) { Available = false };
             this.mnuVsuxPortable = new ToolStripMenuItem("Make self-contained…", null, (s, e) => this.OpenVsuxTools("Portable")) { Available = false };
-            this.mnuVsuxBackup = new ToolStripMenuItem("Export recovery information…", null, (s, e) => this.OpenVsuxTools("Backup")) { Available = false };
+            this.mnuVsuxBackup = new ToolStripMenuItem("Export recovery file…", null, (s, e) => this.OpenVsuxTools("Backup")) { Available = false };
             this.mnuMaintenance.DropDownItems.AddRange(new ToolStripItem[] { this.mnuVsuxConvert, this.mnuVsuxPortable, this.mnuVsuxBackup });
             this.mnuDiskManager = new ToolStripButton("Disk Manager", Ui.GetGlyph(Ui.Glyph.Disk, size, Ui.AccentDark), (s, e) => this.OpenDiskManager()) { ToolTipText = "DiskPart-style partition tools (Ctrl+D)" };
             var index = mnu.Items.IndexOf(mnuDrive) + 1;
@@ -97,7 +97,7 @@ namespace VhdAttach {
             foreach (var item in this.StandardMaintenanceItems) { item.Available = !vsux; }
             this.mnuVsuxConvert.Available = this.mnuVsuxPortable.Available = this.mnuVsuxBackup.Available = vsux;
             this.mnuMaintenance.Text = vsux ? "Soft protection" : "Maintenance";
-            this.mnuMaintenance.ToolTipText = vsux ? "Convert back to VHDX, make self-contained or export recovery information" : "Compact, resize, convert, merge and repair (Alt+T)";
+            this.mnuMaintenance.ToolTipText = vsux ? "Convert back to VHDX, make self-contained or export a recovery file" : "Compact, resize, convert, merge and repair (Alt+T)";
         }
 
         private void OpenVsuxTools(string initialAction = null) {
@@ -619,7 +619,7 @@ namespace VhdAttach {
                 this.mnuVsuxConvert.Enabled = !info.IsAttached && hasPassword;
                 this.mnuVsuxPortable.Enabled = !info.IsAttached && !info.HasEmbeddedPassword && companionPresent;
                 this.mnuVsuxBackup.Enabled = !info.IsAttached;
-                items.Add(new ListViewItem(new[] { "Password information", info.HasEmbeddedPassword ? "Stored inside this file — no JSON companion required" : companionPresent ? "Legacy JSON companion — use Soft protection → Make self-contained" : "Legacy JSON companion missing — use standalone recovery" }) { Group = GroupDetails });
+                items.Add(new ListViewItem(new[] { "Password information", info.HasEmbeddedPassword ? "Stored inside this file" : companionPresent ? "Earlier format — use Soft protection → Make self-contained" : "Original recovery file missing — use standalone recovery" }) { Group = GroupDetails });
                 if (!info.IsLocked) { items.Add(new ListViewItem(new[] { "Lock", "Use Detach & lock to restore the mount lock" }) { Group = GroupDetails }); }
                 state += "|" + info.AttachedPath + "|" + info.HasEmbeddedPassword;
             } catch (Exception ex) {
@@ -684,8 +684,8 @@ namespace VhdAttach {
                     if (VsuxOperations.IsVsuxPath(fileName)) {
                         this.OpenFile(fileName);
                         Medo.MessageBox.ShowInformation(this, frm.CreateSinglePartition
-                            ? "The new VSUX drive has one formatted NTFS partition and is locked. Click Attach and enter its password to use it as a drive.\n\nPassword information stays inside the .vsux file; no JSON companion is required."
-                            : "The new VSUX drive is locked and blank. Click Attach and enter its password, then use Disk Manager to initialize and format the new disk.\n\nPassword information stays inside the .vsux file; no JSON companion is required.");
+                            ? "The new VSUX drive has one formatted NTFS partition and is locked. Click Attach and enter its password to use it as a drive.\n\nPassword information is stored inside this file."
+                            : "The new VSUX drive is locked and blank. Click Attach and enter its password, then use Disk Manager to initialize and format the new disk.\n\nPassword information is stored inside this file.");
                         return;
                     }
                     try {

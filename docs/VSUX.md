@@ -14,7 +14,7 @@ BitLocker-equivalent protection.
 3. Approve elevation if requested, then enter and confirm the password.
 
 Creation produces one locked, detached image. The password salt, verifier and derivation
-parameters are stored inside the VHDX container; no `.vsux.json` companion is created or needed.
+parameters are stored inside the VHDX container. The image travels as a single file.
 With the default checkbox selected, creation initializes the new disk as GPT and formats one
 NTFS data partition before applying its mount lock. Click **Attach** and enter the password to
 use the drive. With the checkbox cleared, creation leaves the disk blank: after attaching, use
@@ -36,43 +36,46 @@ Volumes with a drive letter are available from **Drive → Open …**.
 Start with a full backup and a detached standalone VHDX on a local physical drive. Open it
 in VHD Studio, then open **Maintenance**, select **Soft protection** in the left sidebar and
 click **Protect as VSUX…**. The command is also available from the main window's Maintenance
-dropdown. Choose a new `.vsux` filename in the same folder, confirm the rename, approve
-elevation if requested, and enter and confirm the password.
+dropdown. Enter and confirm the password, approving elevation if requested. VHD Studio changes
+the extension to `.vsux` in the same folder, using the same filename. If that destination already
+exists, it reports **File already exists** and leaves both files unchanged.
 
 Protection accepts dynamic or fixed standalone VHDX images without a pending log. It renames
 the image without copying its payload and stores its password record in VHDX user metadata
 through the Windows virtual-disk API before masking the signature. The main window then opens
 the renamed VSUX image. Existing destinations are refused. Protection does not make a full
-backup; optional recovery-information export is diagnostic information only.
+backup; an optional recovery file contains diagnostic information only.
 
 ## Upgrade an earlier VSUX image
 
-An image created by an earlier release still uses its adjacent `.vsux.json` companion. Keep both
+An image created by an earlier release still uses its original `.vsux.json` recovery file. Keep both
 files together, including when copying it to another PC, until you explicitly upgrade it.
 
 With the disk detached, open it in VHD Studio, click **Soft protection** on the toolbar and choose
-**Make self-contained…**. Enter the existing password. VHD Studio validates the companion and
+**Make self-contained…**. Enter the existing password. VHD Studio validates the recovery file and
 the image, moves the password information into VHDX user metadata and leaves the image locked.
-The original JSON is kept as a backup; it is no longer required for Attach after a successful
+The original recovery file is kept; it is no longer required for Attach after a successful
 upgrade. Make a full backup before upgrading. Opening or attaching an earlier image does not
 silently upgrade its format.
 
 ## Convert back to VHDX
 
 Make a full backup, detach the image, then open **Soft protection → Convert back to VHDX…**.
-Choose a new `.vhdx` filename in the same folder and enter the password. VHD Studio restores
-the ordinary VHDX signature, removes its own embedded password record through the Windows
+Enter the password and click **OK**. VHD Studio changes the extension to `.vhdx` in the same
+folder, using the same filename. It restores the ordinary VHDX signature, removes its own
+embedded password record through the Windows
 virtual-disk API and renames the file without copying the payload. Existing target files are
 never replaced. The result is an ordinary detached, unprotected VHDX; the password no longer
-gates mounting. Any existing legacy JSON or exported diagnostics remain untouched.
+gates mounting. Any existing recovery files remain untouched. If the `.vhdx` destination already
+exists, conversion stops without changing the image; rename the VSUX file first to use another name.
 
 If the password is unavailable, use the standalone recovery tool described below. It restores
 the signature without removing embedded metadata; after renaming, Windows can use the image
 as an ordinary VHDX. This is why VSUX is a mounting deterrent rather than encryption.
 
-## Optional recovery information
+## Optional recovery file
 
-**Soft protection → Export recovery information…** saves JSON diagnostics to a new file. This
+**Soft protection → Export recovery file…** saves diagnostics to a new `.json` file. This
 export contains no password verifier and is optional: normal use of a single-file VSUX and
 standalone recovery need neither the export nor a saved header snapshot. It is not a copy of
 your disk data or a substitute for a full backup. No recovery command writes a saved snapshot
@@ -81,15 +84,26 @@ over current VHDX metadata.
 ## Attach and detach
 
 A single-file VSUX needs only `disk.vsux`, including on another PC. Earlier images still need
-their JSON companion until upgraded as described above. The lock lives in the image, so
+their original recovery file until upgraded as described above. The lock lives in the image, so
 renaming a locked `.vsux` to `.vhdx` does not unlock it.
 
 1. Open the `.vsux` file in VHD Studio.
 2. Click **Attach**, approve Windows administrator elevation if requested, then enter the
    password in the masked prompt. Read-only mounting is available.
-3. When finished, click **Detach & lock** and enter the password. The volumes must flush,
+3. When finished, click **Detach & lock**. After a successful Attach, VHD Studio remembers
+   your unlock session so this action does not ask for the password again. If that session
+   is unavailable, the usual password prompt appears. The volumes must flush,
    lock and dismount before the image is detached and masked. If a file is open, close it and
    retry; there is no force-detach option for VSUX.
+
+The temporary unlock-session record is stored in your Windows user registry and protected
+with Windows user data protection. It contains a disk identity and a fingerprint of the disk's
+password information, not your password. It is bound to the exact backing file and can only
+authorize locking that file; Attach and conversion still require the password. Closing and
+reopening VHD Studio does not discard a session while the disk remains unlocked. If safe
+relock fails, the record remains so you can retry, including after a partial detach. It is
+removed once the image is confirmed locked or successfully converted back to VHDX. The record
+does not travel with the VSUX file.
 
 Explorer's VSUX context menu offers Open, Attach, Attach read-only and Detach and lock after
 installation. The same interactive flows are available with:
@@ -127,7 +141,7 @@ The embedded password record contains a unique random salt, a PBKDF2-HMAC-SHA256
 storing it per image keeps the file portable. The disk identifier is read from VHDX structures.
 The disk payload stays unencrypted.
 
-An earlier companion additionally contains a SHA256-checked snapshot of the original first
+An earlier recovery file additionally contains a SHA256-checked snapshot of the original first
 MiB. That snapshot and optional recovery exports are diagnostic information, not a full backup;
 no command writes them back over current disk metadata. Preserve a full backup before adopting
 the experimental format or changing an existing image.
@@ -140,7 +154,7 @@ check makes this design risk-free.
 
 Setup includes `Recovery\VsuRecover.exe`. It is a self-contained single-file Windows x64 tool
 that can be copied to another PC and run without VHD Studio, a shared .NET runtime, a password
-or the `.vsux.json` companion:
+or a recovery file:
 
 ```powershell
 & "$env:ProgramFiles\VHD Studio\Recovery\VsuRecover.exe" --restore "D:\Disks\disk.vsux"
@@ -166,10 +180,10 @@ dotnet Research\VsuPrototype\bin\Debug\net10.0-windows\VsuPrototype.dll --self-t
 powershell -NoProfile -File Research\VsuPrototype\Run-NativeChecks.ps1
 ```
 
-The structural checks build the earlier companion-based format locally in disposable synthetic
-fixtures. They retain password, malformed/missing-companion and independent eight-byte recovery
+The structural checks build the earlier recovery-file format locally in disposable synthetic
+fixtures. They retain password, malformed/missing-recovery-file and independent eight-byte recovery
 coverage without treating incomplete fixtures as native VHDX images. The native checks use the
-current public protection API to create single-file VSUX images without JSON companions.
+current public protection API to create self-contained VSUX images.
 
 The native script requests elevation and creates uniquely named temporary VHDX files. Only a
 disk verified as this run's newly created 64 MiB file-backed image may be formatted. It checks

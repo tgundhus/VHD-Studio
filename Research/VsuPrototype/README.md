@@ -14,15 +14,15 @@ while the disk is mounted; a read/write session can naturally change other bytes
 
 New protection creates a single `.vsux` file. A per-image random salt, PBKDF2-HMAC-SHA256
 password verifier (600,000 iterations) and derivation parameters are stored in VHDX
-user metadata through Windows; no JSON companion is created or required. Initial
+user metadata through Windows. The image travels as a single file. Initial
 protection changes container metadata and normal header/log bookkeeping beyond the
 eight-byte raw signature boundary. Disk payload contents remain unencrypted.
 
-Earlier images still require their `disk.vsux.json` companion for password operations.
+Earlier images still require their original `disk.vsux.json` recovery file for password operations.
 It also contains the stable disk identifier and a SHA256-checked snapshot of the
 original first 1 MiB. Keep both files together until explicitly upgrading through
-VHD Studio's **Soft protection → Make self-contained…**. The old JSON is retained
-as a backup. Snapshots and optional recovery-information exports are diagnostic
+VHD Studio's **Soft protection → Make self-contained…**. The original recovery file is retained.
+Snapshots and optional recovery files are diagnostic
 information: no command restores them over current metadata. They are not full backups.
 
 The password gates this application. This is mount prevention, **not encryption**:
@@ -58,7 +58,7 @@ The program does not install a service, register file associations, or change VH
 Closing the app does not detach or lock. An app crash while attached or after
 unlock leaves the ordinary VHDX signature available. After any failed operation,
 check the displayed state; never assume the image is locked. If protection fails,
-retain any original `.vhdx`, renamed `.vsux` and existing legacy JSON for diagnosis
+retain any original `.vhdx`, renamed `.vsux` and existing recovery files for diagnosis
 and recovery. Do not assume a failed action rolled back its metadata changes.
 
 ## Standalone recovery
@@ -67,7 +67,7 @@ and recovery. Do not assume a failed action rolled back its metadata changes.
 Research\VsuPrototype\Recovery\bin\Debug\net10.0-windows\VsuRecover.exe --restore "D:\Test\disk.vsux"
 ```
 
-This executable has no dependency on the main prototype, password, companion file,
+This executable has no dependency on the main prototype, password, recovery file,
 saved snapshot or installed VHD Studio. It validates the remaining VHDX structures,
 requires exclusive access, restores **only eight bytes**, flushes and verifies them,
 and leaves the filename unchanged. Rename `.vsux` to `.vhdx` to stop using the lock.
@@ -85,15 +85,15 @@ dotnet Research\VsuPrototype\bin\Debug\net10.0-windows\VsuPrototype.dll --self-t
 powershell -NoProfile -File Research\VsuPrototype\Run-NativeChecks.ps1
 ```
 
-The first suite constructs the earlier companion-based format with a local test-only
+The first suite constructs the earlier recovery-file format with a local test-only
 helper restricted to its freshly created synthetic fixtures. It tests byte preservation,
-password failure, portability, malformed/missing companion files, partial-write recovery,
+password failure, portability, malformed/missing recovery files, partial-write recovery,
 invalid images and exclusive-access/no-overwrite guards. It does not claim those fixtures
 can be mounted or use Windows' native user-metadata API.
 
 The native suite creates its own uniquely named temporary VHDX images and fails if
 Windows cannot create or mount them. It uses the current public protection API,
-verifies embedded credentials without a JSON companion, and checks masked-image
+verifies embedded credentials without a recovery file, and checks masked-image
 rejection, password attach, safe detach, recovery, payload preservation and busy-file
 refusal. Byte preservation is compared against the image after initial metadata creation;
 raw signature changes and read-only mounting must preserve the other bytes. Only a
@@ -118,7 +118,7 @@ on exit, differencing disks, network paths and custom filesystem drivers remain 
 
 ## Original prototype verification, 23 October 2026
 
-These initial results describe the earlier companion-based format, before embedded
+These initial results describe the earlier recovery-file format, before embedded
 password metadata was added. They do not verify the later metadata-writing paths.
 
 Both self-contained Windows x64 executables were published successfully. All 19
@@ -126,8 +126,8 @@ checks passed in the elevated native run, including:
 
 - Exact preservation of image bytes after offset 7, file length, and full SHA256
   recovery after a read-only Windows attach/detach cycle.
-- Wrong passwords, malformed/missing/mismatched companion files, and partial
-  signature writes; the independent recovery executable succeeds without a sidecar.
+- Wrong passwords, malformed/missing/mismatched recovery files, and partial
+  signature writes; the independent recovery executable succeeds without a recovery file.
 - Windows and installed 7-Zip accepting the original VHDX and rejecting its masked form.
 - Real NTFS payload preservation across write, safe detach, lock, password attach,
   and read-only use; a deliberately open payload file prevents detach and masking.

@@ -124,6 +124,7 @@ namespace VhdAttachTest {
                         RefreshCommands(form, container);
                         var observedPassword = false;
                         var maskedPassword = false;
+                        var onlyPasswordVisible = false;
                         var timedOut = false;
                         var elapsed = Stopwatch.StartNew();
                         timer.Tick += (sender, args) => {
@@ -135,6 +136,7 @@ namespace VhdAttachTest {
                                     observedPassword = true;
                                     var box = (TextBox)dialog.GetType().GetField("PasswordBox", PrivateInstance).GetValue(dialog);
                                     maskedPassword = box.UseSystemPasswordChar;
+                                    onlyPasswordVisible = dialog.Owner is VhdAttach.VsuxForm operation && operation.Opacity == 0 && !operation.ShowInTaskbar && form.Opacity == 1;
                                     dialog.DialogResult = DialogResult.Cancel;
                                 }
                             }
@@ -160,6 +162,7 @@ namespace VhdAttachTest {
                         Assert.IsFalse(timedOut, "The Attach button did not finish the password cancellation within ten seconds.");
                         Assert.IsTrue(observedPassword, "The Attach button did not open the VSUX password prompt.");
                         Assert.IsTrue(maskedPassword, "The VSUX prompt must mask the password by default.");
+                        Assert.IsTrue(onlyPasswordVisible, "Attach must leave the main window available without showing a progress window behind the password prompt.");
                     }
                 });
             } finally { Environment.ExitCode = savedExitCode; }

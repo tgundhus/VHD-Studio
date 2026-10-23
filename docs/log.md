@@ -116,3 +116,24 @@ Read this when you want to know what changed in the documentation and when. Appe
   safe detach and VSUX locking. Existing-image Attach remains separate from layout changes.
 - Updated [SAFETY.md](SAFETY.md) for creation-only NTFS setup, exact backing-file checks,
   RAW/empty/zero-probe guards, safe detach before VSUX protection, and the blank opt-out.
+- Replaced VSUX external-password-file terminology in [README.md](../README.md),
+  [the website](../site/index.html), [VSUX.md](VSUX.md), [SAFETY.md](SAFETY.md),
+  [product/password-protection-design.md](product/password-protection-design.md), the
+  [prototype guide](../Research/VsuPrototype/README.md) and release history with recovery-file
+  wording. Current images store password information inside the image; an optional exported
+  recovery file contains diagnostics and is not a full backup. Earlier images still need their
+  original recovery file until an explicit upgrade. Kept the visible FAQ identical to its JSON-LD.
+- Documented automatic same-folder extension changes for **Protect as VSUX…** and
+  **Convert back to VHDX…**: set or enter the password without a destination picker or extra
+  confirmation, and report **File already exists** before the password prompt if the destination
+  is taken. Existing files remain protected by the engine's no-overwrite checks.
+- Updated [VSUX.md](VSUX.md), [SAFETY.md](SAFETY.md), [README.md](../README.md),
+  [the website](../site/index.html) and the 5.2.2 [changelog](../CHANGELOG.md) for a temporary,
+  per-user Windows-protected unlock-session record. Successful Attach enables password-free
+  safe relock of the exact file; confirmed lock removes the record and failed relock keeps it
+  for retry. Passwords are not cached and sessions cannot authorize Attach or conversion.
+- Documented consolidated operation windows and removal of temporary drive letters during
+  new-disk preparation in the 5.2.2 [changelog](../CHANGELOG.md).
+- Clarified in [VSUX.md](VSUX.md), [SAFETY.md](SAFETY.md), [README.md](../README.md),
+  [the website](../site/index.html) and the [changelog](../CHANGELOG.md) that successfully
+  converting back to VHDX also removes that file's unlock-session record.

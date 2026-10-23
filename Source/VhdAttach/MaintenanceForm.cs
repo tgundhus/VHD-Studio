@@ -160,7 +160,7 @@ namespace VhdAttach {
             this.AddHeading(flow, "Soft protection (VSUX)");
             this.AddParagraph(flow, "Create a soft protected drive that asks for a password when you click Attach in VHD Studio. Ordinary virtual disk tools cannot open it while locked.");
             this.AddParagraph(flow, "The disk data stays unencrypted. Specialists and the standalone recovery tool can restore access without the password.", Ui.Muted);
-            this.AddParagraph(flow, "Protection stores a small password record inside the VHDX and renames it to .vsux. The file travels by itself; a JSON companion is optional. Initial protection changes container metadata; later signature locking changes eight bytes. Make a full backup first.");
+            this.AddParagraph(flow, "Protection stores a small password record inside the VHDX and renames it to .vsux. The file travels by itself. Initial protection changes container metadata; later signature locking changes eight bytes. Make a full backup first.");
             this.AddParagraph(flow, "Use Detach && lock in VHD Studio when finished. It flushes and safely detaches the drive before locking, and refuses while files are open.");
             var run = this.AddButton(flow, "&Protect as VSUX…", Ui.Glyph.Shield);
             run.Name = "ProtectVsuxButton";
@@ -176,38 +176,28 @@ namespace VhdAttach {
             if (this.IsBusy) { return; }
             this.ReloadDetails();
             if (!this.CanProtectVsux()) { this.ShowTask("Soft protection"); return; }
-            using (var target = new SaveFileDialog {
-                Title = "Protect as VSUX in the same folder", Filter = "VSUX files (*.vsux)|*.vsux", DefaultExt = "vsux", AddExtension = true,
-                FileName = Path.GetFileNameWithoutExtension(this.FileName) + ".vsux", InitialDirectory = Path.GetDirectoryName(this.FileName), OverwritePrompt = false
-            }) {
-                if (target.ShowDialog(this) != DialogResult.OK) { return; }
-                if (!string.Equals(Path.GetDirectoryName(this.FileName), Path.GetDirectoryName(Path.GetFullPath(target.FileName)), StringComparison.OrdinalIgnoreCase)) {
-                    Medo.MessageBox.ShowWarning(this, "Save the VSUX file in the same folder as the source VHDX image.");
-                    return;
-                }
-                if (File.Exists(target.FileName) || Directory.Exists(target.FileName)) {
-                    Medo.MessageBox.ShowWarning(this, "The destination already exists. Choose a new name.");
-                    return;
-                }
-                if (Medo.MessageBox.ShowQuestion(this, "This stores password information in the VHDX's custom metadata and renames the detached image to .vsux. The data stays unencrypted, and the file works without a JSON companion.\n\nMake a full backup first. Initial protection writes container metadata in addition to the eight signature bytes. Standalone recovery can restore access without the password. Continue?", MessageBoxButtons.YesNo) != DialogResult.Yes) { return; }
-                this.IsBusy = true;
-                this.Page.Enabled = false;
-                this.TaskList.Enabled = false;
-                try {
-                    if (VsuxForm.RunOperation(this, "Protect", this.FileName, destination: target.FileName) == DialogResult.OK) {
-                        this.ProtectedFileName = target.FileName;
-                        this.IsBusy = false;
-                        this.DialogResult = DialogResult.OK;
-                        this.Close();
-                    }
-                } finally {
+            var target = Path.ChangeExtension(this.FileName, ".vsux");
+            if (File.Exists(target) || Directory.Exists(target)) {
+                Medo.MessageBox.ShowError(this, "File already exists");
+                return;
+            }
+            this.IsBusy = true;
+            this.Page.Enabled = false;
+            this.TaskList.Enabled = false;
+            try {
+                if (VsuxForm.RunOperation(this, "Protect", this.FileName, destination: target) == DialogResult.OK) {
+                    this.ProtectedFileName = target;
                     this.IsBusy = false;
-                    if (this.ProtectedFileName == null && !this.IsDisposed) {
-                        this.Page.Enabled = true;
-                        this.TaskList.Enabled = true;
-                        this.ReloadDetails();
-                        this.ShowTask("Soft protection");
-                    }
+                    this.DialogResult = DialogResult.OK;
+                    this.Close();
+                }
+            } finally {
+                this.IsBusy = false;
+                if (this.ProtectedFileName == null && !this.IsDisposed) {
+                    this.Page.Enabled = true;
+                    this.TaskList.Enabled = true;
+                    this.ReloadDetails();
+                    this.ShowTask("Soft protection");
                 }
             }
         }

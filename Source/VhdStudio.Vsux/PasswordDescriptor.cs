@@ -64,7 +64,7 @@ internal sealed class PasswordDescriptor {
             BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(12)) != WorkFactor ||
             new Guid(bytes.AsSpan(16, 16)) == Guid.Empty ||
             !CryptographicOperations.FixedTimeEquals(SHA256.HashData(bytes.AsSpan(0, 96)), bytes.AsSpan(96, 32))) {
-            throw new InvalidDataException("The embedded VSUX password record is invalid. No legacy companion will be used instead. Standalone recovery remains available.");
+            throw new InvalidDataException("The embedded VSUX password record is invalid. An earlier recovery file cannot replace it. Standalone recovery remains available.");
         }
         return new PasswordDescriptor {
             Format = "VSUX-embedded-2", DiskId = new Guid(bytes.AsSpan(16, 16)), Iterations = WorkFactor,
@@ -105,21 +105,21 @@ internal sealed class PasswordDescriptor {
         var reread = new byte[bytes.Length];
         file.ReadExactly(reread);
         if (file.Length != bytes.Length || !CryptographicOperations.FixedTimeEquals(SHA256.HashData(bytes), SHA256.HashData(reread))) {
-            throw new IOException("The companion file did not pass read-back verification. The image has not been masked.");
+            throw new IOException("The original recovery file did not pass read-back verification. The image has not been masked.");
         }
     }
 
     public static PasswordDescriptor Load(string path) {
         SignatureFile.ValidatePath(path);
         using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        if (file.Length is < 1 or > 3 * 1024 * 1024) { throw new InvalidDataException("Invalid VSUX companion file size."); }
+        if (file.Length is < 1 or > 3 * 1024 * 1024) { throw new InvalidDataException("Invalid original VSUX recovery file size."); }
         var bytes = new byte[(int)file.Length];
         file.ReadExactly(bytes);
         var result = JsonSerializer.Deserialize<PasswordDescriptor>(bytes, JsonOptions) ?? throw new InvalidDataException("Missing VSUX descriptor.");
         if (result.Format != "VSUX-prototype-1" || result.DiskId == Guid.Empty || result.Iterations != WorkFactor ||
             result.Salt?.Length != 32 || result.PasswordHash?.Length != 32 || result.HeaderSnapshot?.Length != SignatureFile.SnapshotSize || result.SnapshotSha256?.Length != 32 ||
             !CryptographicOperations.FixedTimeEquals(SHA256.HashData(result.HeaderSnapshot), result.SnapshotSha256)) {
-            throw new InvalidDataException("The VSUX companion file or recovery snapshot is invalid. Standalone recovery does not need this file.");
+            throw new InvalidDataException("The original VSUX recovery file or its snapshot is invalid. Standalone recovery does not need this file.");
         }
         return result;
     }

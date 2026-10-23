@@ -82,9 +82,9 @@ namespace VhdAttach {
                     StorageManager.CreatePartition(disk, 0, assignDriveLetter: false, fileSystem: null, label: null);
                     var partition = WaitForPartition(image, disk, fileName, formatted: false);
                     StorageManager.FormatPartition(Revalidate(image, disk, fileName), partition, "NTFS", "", quick: true);
-                    partition = WaitForPartition(image, disk, fileName, formatted: true);
-                    // Assign only after formatting, so Explorer never sees an unformatted volume.
-                    StorageManager.AddAccessPath(Revalidate(image, disk, fileName), partition, null);
+                    WaitForPartition(image, disk, fileName, formatted: true);
+                    // Keep preparation without a drive letter. A temporary letter can trigger
+                    // Explorer/AutoPlay just before the new image is detached and locked.
                 } catch (Exception error) {
                     failure = error;
                 }

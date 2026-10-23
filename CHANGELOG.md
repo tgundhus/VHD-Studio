@@ -1,5 +1,24 @@
 # Changelog
 
+## 5.2.2
+
+### Improved
+- After a successful password-based VSUX Attach, **Detach & lock** can reuse that user's
+  unlock session without asking for the password again. The Windows-protected session is
+  bound to that exact disk and its password information, retained if safe relock fails, and
+  removed after confirmed lock or conversion back to VHDX. Other actions still require the password.
+
+### Fixed
+- VSUX operations show the password prompt followed by one progress window. The settings
+  dialog and the unelevated waiting window no longer stack behind the elevated operation.
+- New disk preparation does not assign a temporary drive letter before detach, preventing
+  Explorer/AutoPlay from opening a drive that disappears when creation finishes.
+- **Protect as VSUX…** and **Convert back to VHDX…** go straight to the password prompt and
+  use the matching filename with the new extension in the same folder. If that destination
+  exists, the action reports **File already exists** without replacing it.
+- Normal VSUX screens describe password information stored in the disk and optional recovery
+  files.
+
 ## 5.2.1
 
 ### New
@@ -20,14 +39,14 @@
 ### New
 - New and newly protected **VSUX** images are single files. Their per-disk password salt,
   verifier and derivation parameters are stored in VHDX user metadata through the Windows
-  virtual-disk API; a `.vsux.json` companion is no longer created or needed for normal use.
+  virtual-disk API; a separate recovery file is no longer created or needed for normal use.
 - **Soft protection** is available from the toolbar for VSUX images. **Make self-contained…**
-  upgrades an earlier companion-based image after password verification; the old JSON is kept
-  as a backup. Until that explicit upgrade, earlier images still require their companion.
+  upgrades an earlier recovery-file-based image after password verification; the original recovery
+  file is kept. Until that explicit upgrade, earlier images still require their recovery file.
 - **Convert back to VHDX…** verifies the password, removes the embedded VSUX password record
   and renames a detached image to a new `.vhdx` filename in the same folder without copying the
-  payload. Existing files are refused. **Export recovery information…** writes optional JSON
-  diagnostics; standalone recovery still requires neither JSON nor a password.
+  payload. Existing files are refused. Recovery export writes optional diagnostic files;
+  standalone recovery still requires neither a recovery file nor a password.
 
 ### Safety
 - The raw signature writer still changes only bytes 0–7. Initial protection, conversion of the
@@ -41,11 +60,11 @@
 
 ### Improved
 - **New → VSUX (soft protected drive)** creates a blank, locked `.vsux` image and its
-  `.vsux.json` companion, with password setup during creation. Click **Attach** and enter the
+  `.vsux.json` recovery file, with password setup during creation. Click **Attach** and enter the
   password, then use **Disk Manager** to initialize and format the new blank disk.
 - The **Maintenance** window now has a visible **Soft protection** page with **Protect as VSUX…**
   for an existing detached standalone VHDX. After protection, the main window opens the renamed
-  VSUX image. Existing files and companions are never overwritten.
+  VSUX image. Existing image and recovery files are never overwritten.
 - Both entry points explain that VSUX leaves the data unencrypted and deters ordinary mounting;
   specialists and the independent recovery tool can bypass the password. **Detach & lock** and
   standalone eight-byte recovery remain available.
@@ -71,12 +90,12 @@
   **Maintenance → Protect as VSUX…**, then enter its password when choosing **Attach**.
   The data stays unencrypted: only the eight signature bytes change, blocking ordinary mounting
   while locked, including on another PC. This convenience barrier can be bypassed by restoring
-  the public signature. Keep the `.vsux.json` companion beside the image.
+  the public signature. Keep the original `.vsux.json` recovery file beside the image.
 - **Detach & lock** flushes, locks and dismounts VSUX volumes before detaching and restoring the
   mount lock. Open files stop the operation; there is no force-detach option. VSUX requests
   administrator approval and is excluded from auto-mount and Maintenance.
 - Setup includes the independent, self-contained **VsuRecover.exe**. It validates a detached image
-  and restores only the eight signature bytes, without a password or companion file. An interrupted
+  and restores only the eight signature bytes, without a password or recovery file. An interrupted
   session can leave a disk unlocked, and signature writes still carry power-loss risk; keep a full backup.
 
 ### Release

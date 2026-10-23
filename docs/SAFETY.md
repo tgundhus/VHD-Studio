@@ -48,8 +48,8 @@ and change-approval boards.
 | Operation | Preconditions | Interruptible | After |
 |---|---|---|---|
 | Soft protection (VSUX) | detached standalone dynamic or fixed VHDX, no pending log, new image destination in the same folder | no | password record stored in VHDX user metadata through Windows, image renamed to `.vsux`, signature masked and locked state verified; no full backup is made |
-| Make VSUX self-contained | detached clean image in the earlier companion-based format, valid companion and password | no | password record stored in VHDX user metadata through Windows, original lock state preserved, old JSON retained as a backup |
-| Convert VSUX back to VHDX | detached clean image, valid password, new `.vhdx` destination in the same folder | no | own embedded password record removed through Windows, ordinary signature restored, file renamed without copying the payload; legacy JSON retained |
+| Make VSUX self-contained | detached clean image in the earlier recovery-file format, valid original recovery file and password | no | password record stored in VHDX user metadata through Windows, original lock state preserved, original recovery file retained |
+| Convert VSUX back to VHDX | detached clean image, valid password, corresponding `.vhdx` destination absent | no | own embedded password record removed through Windows, ordinary signature restored, file extension changed without copying the payload; recovery files retained |
 | Compact | detached, no pending log, dynamic or differencing | yes (documented safe) | file never grows |
 | Resize | detached, no pending log, ≥ smallest safe size, free space for fixed growth | no | size verified |
 | Convert | source detached, chain complete, destination new, free space for the full copy, sector size unchanged | yes, and the partial destination is removed | result size, type and sector size verified, source never modified |
@@ -71,11 +71,11 @@ metadata, including Windows' normal header/log bookkeeping. The eight-byte bound
 the raw signature writer, not the total writes made by every action. No VSUX action encrypts
 the disk payload or makes a full backup.
 
-Earlier VSUX images still need their adjacent `.vsux.json` companion for password-based use
+Earlier VSUX images still need their original `.vsux.json` recovery file for password-based use
 until explicitly upgraded through **Soft protection → Make self-contained…**. The upgrade
-requires the password, a clean detached image and a valid companion; the old JSON is retained
-as a backup. Normal Attach never silently migrates an image. New single-file images can move
-between PCs without JSON. The optional **Export recovery information…** JSON contains
+requires the password, a clean detached image and a valid original recovery file; that file is
+retained. Normal Attach never silently migrates an image. New single-file images can move
+between PCs by themselves. The optional **Export recovery file…** contains
 diagnostics, not password-verifier information, and is not required for normal use or recovery.
 
 **New → Create one NTFS partition** is checked by default for VHD, VHDX and VSUX. Only the newly
@@ -86,23 +86,24 @@ is protected only after successful detach and finishes locked. Clearing the chec
 initialization and formatting, leaving a blank disk for manual setup. The prepared option needs
 at least 64 MiB and administrator approval. Ordinary Attach never invokes this creation step.
 Existing image destinations, including directories with those names, are refused;
-an unrelated adjacent JSON file is ignored and left unchanged. If creation fails after files have
+an existing recovery file is ignored and left unchanged. If creation fails after files have
 been created, the error identifies the possible temporary VHDX and container paths. They are
 retained for inspection and recovery; the user must not assume the partial result is locked.
 
 | Risk | Safeguard or limit |
 |---|---|
 | Masking a disk while files remain open | Volumes must flush, lock and dismount before detach. Masking needs exclusive file access and validates the VHDX structures. VSUX has no force-detach path. |
-| Wrong password, missing or invalid credential record | Password operations validate the embedded record, or the earlier companion against the image's stable identifier, before changing the signature. An earlier image with a missing companion requires recovery. |
+| Wrong password, missing or invalid credential record | Password operations validate the embedded record, or the original recovery file for the earlier format, against the image's stable identifier before changing the signature. An earlier image with a missing recovery file requires standalone recovery. |
 | First protection or migration loses the password metadata | Windows writes the VHDX user-metadata item, which is read back and verified before the image is masked and reported locked. Existing image destinations are never overwritten. Keep a full backup before the operation. |
 | Password exposure through service IPC, process arguments or logs | VSUX prompts in its elevated process and does not send passwords to the attach service or put them on the command line or in audit details. |
+| Reusing an unlock session for the wrong file or action | A successful password-based Attach stores a per-user, Windows-protected registry receipt bound to disk identifier, backing-file identity and a credential fingerprint. It authorizes only safe relock of that file. Identity and credentials are checked again after detach before masking. Failed relock retains the receipt for retry; confirmed lock or successful conversion back to VHDX removes it. No password is cached, and the receipt cannot authorize Attach or conversion. |
 | An unattended path bypasses the prompt or changes locked-image metadata | Protected VSUX containers are excluded from service attach/auto-mount and standard Maintenance operations. Use their dedicated Attach, Detach and lock, and Soft protection actions. Initial protection of an ordinary VHDX is available on Maintenance's Soft protection page. |
-| Conversion back damages or overwrites a different file | Conversion requires a detached clean source, password verification and a new `.vhdx` name in the same folder. An exclusive file-handle rename refuses existing destinations before any signature write. The signature is then restored and Windows removes only VHD Studio's own metadata item without copying the payload. Unrelated metadata is preserved; old JSON files are not deleted. |
-| Lost password or companion, or an interrupted signature write | Independent `Recovery\VsuRecover.exe --restore <path>` validates the remaining structures, requires exclusive access and restores only the public eight-byte identifier. It requires no password, companion or saved header snapshot. |
+| Conversion back damages or overwrites a different file | Conversion requires a detached clean source and password verification. It changes the extension to `.vhdx` in the same folder; an exclusive file-handle rename refuses existing destinations before any signature write. The signature is then restored and Windows removes only VHD Studio's own metadata item without copying the payload. Unrelated metadata is preserved; recovery files are not deleted. |
+| Lost password or original recovery file, or an interrupted signature write | Independent `Recovery\VsuRecover.exe --restore <path>` validates the remaining structures, requires exclusive access and restores only the public eight-byte identifier. It requires no password, recovery file or saved header snapshot. |
 | Application exit, crash or Windows shutdown while unlocked | Closing VHD Studio does not promise automatic relocking. An interrupted session can leave the normal signature available; check the state and use Detach and lock. |
 | Power loss during a signature or metadata write | Eight-byte writes are not guaranteed atomic. Masking the VHDX file signature violates the normal VHDX writing rules; Windows metadata updates also make changes beyond those bytes. Structural checks and recovery reduce mistakes but cannot promise zero corruption risk. Keep a full backup. |
 
-The first-MiB snapshot in an earlier companion or an exported diagnostics file is diagnostic
+The first-MiB snapshot in an earlier recovery file or an exported recovery file is diagnostic
 data. Neither the normal lock path nor standalone recovery writes it back over current VHDX
 metadata. Recovery leaves any embedded password item intact and restores only bytes 0–7.
 It ignores private password-record contents and format constraints, including empty or oversized

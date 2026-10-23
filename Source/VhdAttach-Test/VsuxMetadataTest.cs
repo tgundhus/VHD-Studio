@@ -1,6 +1,8 @@
 using System;
 using System.Buffers.Binary;
 using System.ComponentModel;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -253,9 +255,103 @@ namespace VhdAttachTest {
                         Assert.AreEqual(legacy, portable.Enabled, "Only a legacy image needs companion migration.");
                         StringAssert.Contains(convert.AccessibleName, "Convert back to VHDX");
                         StringAssert.Contains(backup.AccessibleName, "Export recovery");
+                        var text = string.Join("\n", VsuxCreationTest.Descendants(form).Select(control => control.Text));
+                        Assert.IsFalse(text.Contains("JSON", StringComparison.OrdinalIgnoreCase), "Normal soft-protection tools must describe optional recovery files without JSON terminology.");
+                        Assert.IsFalse(text.Contains("companion", StringComparison.OrdinalIgnoreCase), "The normal workflow must not describe a companion-file requirement.");
                     } finally { form.Hide(); }
                 }
             });
+        }
+
+        [TestMethod]
+        [DataRow("Convert", false)]
+        [DataRow("Convert", true)]
+        [DataRow("Protect", false)]
+        [DataRow("Protect", true)]
+        [TestCategory("Elevated")]
+        [DoNotParallelize]
+        public void ProtectionActions_AskForPasswordDirectlyWithOneVisibleDialog(string operation, bool accept) {
+            ScratchDisk.RequireElevation();
+            var source = operation == "Convert" ? this.CreateProtected() : this.CreateNative();
+            var target = Path.ChangeExtension(source, operation == "Convert" ? ".vhdx" : ".vsux");
+            var originalHash = ScratchDisk.HashFile(source);
+            var savedExitCode = Environment.ExitCode;
+            try {
+                VsuxCreationTest.RunSta(() => {
+                    using (Form owner = operation == "Convert" ? new VhdAttach.VsuxToolsForm(source) : new VhdAttach.MaintenanceForm(source, "Soft protection")) {
+                        owner.StartPosition = FormStartPosition.Manual;
+                        owner.Location = new Point(-30000, -30000);
+                        owner.Opacity = 0.85;
+                        owner.ShowInTaskbar = true;
+                        owner.Show();
+                        var opacity = owner.Opacity;
+                        var prompts = 0;
+                        var oneVisibleDialog = true;
+                        var imageUnchangedAtPrompt = false;
+                        var correctButton = false;
+                        var timedOut = false;
+                        var elapsed = Stopwatch.StartNew();
+                        using (var timer = new System.Windows.Forms.Timer { Interval = 25 }) {
+                            timer.Tick += (sender, args) => {
+                                var dialogs = OwnedDialogs(owner);
+                                var password = dialogs.OfType<VhdAttach.VsuxPasswordForm>().FirstOrDefault(form => form.Visible);
+                                if (password != null && prompts == 0) {
+                                    prompts++;
+                                    oneVisibleDialog = owner.Opacity == 0 && !owner.ShowInTaskbar
+                                        && password.Owner is VhdAttach.VsuxForm operationForm && operationForm.Opacity == 0 && !operationForm.ShowInTaskbar
+                                        && dialogs.Count(dialog => dialog.Visible && dialog.Opacity > 0) == 1;
+                                    imageUnchangedAtPrompt = File.Exists(source) && ScratchDisk.HashFile(source) == originalHash && !File.Exists(target);
+                                    correctButton = operation != "Convert" || ((Button)password.AcceptButton).Text.Replace("&", "") == "OK";
+                                    password.StartPosition = FormStartPosition.Manual;
+                                    password.Location = new Point(-30000, -30000);
+                                    if (accept) {
+                                        const BindingFlags fields = BindingFlags.Instance | BindingFlags.NonPublic;
+                                        ((TextBox)typeof(VhdAttach.VsuxPasswordForm).GetField("PasswordBox", fields).GetValue(password)).Text = Password;
+                                        if (operation == "Protect") { ((TextBox)typeof(VhdAttach.VsuxPasswordForm).GetField("ConfirmationBox", fields).GetValue(password)).Text = Password; }
+                                        password.AcceptButton.PerformClick();
+                                    } else { password.DialogResult = DialogResult.Cancel; }
+                                }
+                                if (elapsed.Elapsed < TimeSpan.FromSeconds(20)) { return; }
+                                timedOut = true;
+                                for (var index = dialogs.Count - 1; index >= 0; index--) { dialogs[index].DialogResult = DialogResult.Cancel; }
+                            };
+                            try {
+                                timer.Start();
+                                var buttonName = operation == "Convert" ? "ConvertVsuxButton" : "ProtectVsuxButton";
+                                VsuxCreationTest.Descendants(owner).OfType<Button>().Single(button => button.Name == buttonName).PerformClick();
+                            } finally { timer.Stop(); }
+                        }
+                        Assert.IsFalse(timedOut, "The direct password workflow did not finish within twenty seconds.");
+                        Assert.AreEqual(1, prompts, "The action must go directly to a password prompt without a destination or confirmation dialog.");
+                        Assert.IsTrue(oneVisibleDialog, "Only the password prompt should be visible while the operation and its owning tools wait.");
+                        Assert.IsTrue(imageUnchangedAtPrompt, "The image changed before the password was accepted.");
+                        Assert.IsTrue(correctButton, "Convert back to VHDX must require only the password and OK.");
+                        if (!accept) {
+                            Assert.AreEqual(opacity, owner.Opacity, "Cancellation must restore the original tools window opacity.");
+                            Assert.IsTrue(owner.ShowInTaskbar && owner.Visible && owner.Enabled, "Cancellation must restore the usable tools window.");
+                        }
+                        if (!owner.IsDisposed) { owner.Hide(); }
+                    }
+                });
+            } finally { Environment.ExitCode = savedExitCode; }
+            if (accept) {
+                Assert.IsFalse(File.Exists(source));
+                CollectionAssert.AreEquivalent(new[] { target }, Directory.GetFiles(this.Folder), "A successful action must rename the source using the same base name without extra output files.");
+                if (operation == "Convert") { Assert.AreEqual("VHDX", VirtualDiskImage.GetDetails(target).Format); }
+                else { Assert.IsTrue(VsuxOperations.GetInfo(target).IsLocked); }
+            } else {
+                Assert.AreEqual(originalHash, ScratchDisk.HashFile(source), "Cancelling the password changed the image.");
+                CollectionAssert.AreEquivalent(new[] { source }, Directory.GetFiles(this.Folder), "Cancellation must leave no output or temporary images.");
+            }
+        }
+
+        private static List<Form> OwnedDialogs(Form owner) {
+            var dialogs = new List<Form>();
+            foreach (var dialog in owner.OwnedForms) {
+                dialogs.Add(dialog);
+                dialogs.AddRange(OwnedDialogs(dialog));
+            }
+            return dialogs;
         }
 
         [TestMethod]

@@ -25,7 +25,7 @@ internal static class PrototypeChecks {
         Directory.CreateDirectory(directory);
         var passed = 0;
         Console.WriteLine($"Disposable check directory: {directory}");
-        Console.WriteLine("Structural fixtures verify legacy-companion guards and raw signature byte preservation; they are not mountable native test images.");
+        Console.WriteLine("Structural fixtures verify original recovery-file guards and raw signature byte preservation; they are not mountable native test images.");
 
         void Check(string name, Action<string> check) {
             var path = Path.Combine(directory, name + ".vhdx");
@@ -128,7 +128,7 @@ internal static class PrototypeChecks {
                 File.WriteAllText(container + ".json", sidecar.ToJsonString());
                 var locked = File.ReadAllBytes(container);
                 ExpectRefusal(() => PrototypeOperations.Unlock(container, Password));
-                AssertSameHash(locked, File.ReadAllBytes(container), "A companion for another disk changed image bytes.");
+                AssertSameHash(locked, File.ReadAllBytes(container), "A recovery file for another disk changed image bytes.");
                 SignatureFile.Restore(container);
                 AssertSameHash(original, File.ReadAllBytes(container), "Recovery depended on a matching disk identifier in the sidecar.");
             });
@@ -246,7 +246,7 @@ internal static class PrototypeChecks {
                     var result = RunTool(recoveryExe, ["--restore", container], directory);
                     Assert(result.ExitCode == 0, "Standalone recovery failed: " + result.Error + result.Output);
                     AssertSameHash(original, File.ReadAllBytes(container), "Standalone recovery executable changed bytes outside the signature.");
-                    Assert(!File.Exists(container + ".json"), "Standalone recovery unexpectedly required or created a companion file.");
+                    Assert(!File.Exists(container + ".json"), "Standalone recovery unexpectedly required or created a recovery file.");
                 });
             } else {
                 Console.WriteLine("Set VSUX_RECOVERY_EXE to include the independent recovery executable check.");

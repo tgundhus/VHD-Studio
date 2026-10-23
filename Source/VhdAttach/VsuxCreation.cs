@@ -7,7 +7,7 @@ namespace VhdAttach {
     /// <summary>Creates a new VHDX, optionally prepares an NTFS volume, then applies the VSUX mount lock.</summary>
     internal static class VsuxCreation {
         internal static void Create(string containerPath, long size, bool fixedSize, string password, bool createSinglePartition = false) {
-            // Validate the secret before creating even the temporary image or its companion.
+            // Validate the secret before creating even the temporary image.
             if (password == null || password.Length < 8 || password.Length > 1024) {
                 throw new ArgumentException("Use a password between 8 and 1024 characters.", nameof(password));
             }

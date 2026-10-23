@@ -33,9 +33,9 @@ namespace VhdAttach {
             this.ConvertButton = this.AddButton("ConvertVsuxButton", "&Convert back to VHDX…", () => this.Run("Convert"));
             this.AddText("Remove soft protection and rename this detached image to .vhdx. Its files and partitions stay in place.");
             this.PortableButton = this.AddButton("MakeSelfContainedButton", "&Make self-contained…", () => this.Run("Portable"));
-            this.AddText("Upgrade an older VSUX so it works without its JSON companion. The old JSON file is kept.");
-            this.BackupButton = this.AddButton("ExportRecoveryButton", "&Export recovery information…", () => this.Run("Backup"));
-            this.AddText("Save optional JSON diagnostics. This is not a full backup, and standalone recovery works without it.");
+            this.AddText("Store an older VSUX's password information inside the image. The original recovery file is kept.");
+            this.BackupButton = this.AddButton("ExportRecoveryButton", "&Export recovery file…", () => this.Run("Backup"));
+            this.AddText("Save an optional recovery file containing diagnostics. This is not a full backup, and standalone recovery works without it.");
             var footer = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(this.Font.Height / 2) };
             var close = new Button { Text = "Close", DialogResult = DialogResult.Cancel, AutoSize = true, MinimumSize = new Size(90, 28) };
             footer.Controls.Add(close);
@@ -72,7 +72,7 @@ namespace VhdAttach {
                 var info = VsuxOperations.GetInfo(this.FilePath);
                 var hasPassword = info.HasEmbeddedPassword || File.Exists(this.FilePath + ".json");
                 this.Status.ForeColor = Ui.AccentDark;
-                this.Status.Text = info.HasEmbeddedPassword ? "Self-contained VSUX — this file works without a JSON companion." : "Legacy VSUX — keep its .vsux.json companion until you make it self-contained.";
+                this.Status.Text = info.HasEmbeddedPassword ? "Password information is stored inside this file." : "Earlier VSUX format — keep its original recovery file until you make it self-contained.";
                 if (info.IsAttached) { this.Status.Text += " Use Detach & lock before these actions."; }
                 this.ConvertButton.Enabled = !info.IsAttached && hasPassword;
                 this.PortableButton.Enabled = !info.IsAttached && !info.HasEmbeddedPassword && hasPassword;
@@ -88,27 +88,27 @@ namespace VhdAttach {
             this.RefreshState();
             if ((operation == "Convert" && !this.ConvertButton.Enabled) || (operation == "Portable" && !this.PortableButton.Enabled) || (operation == "Backup" && !this.BackupButton.Enabled)) { return; }
             string target = null;
-            if (operation != "Portable") {
+            if (operation == "Convert") {
+                target = Path.ChangeExtension(this.FilePath, ".vhdx");
+            } else if (operation == "Backup") {
                 using (var save = new SaveFileDialog {
-                    Title = operation == "Convert" ? "Convert back to VHDX in the same folder" : "Export optional recovery information",
-                    Filter = operation == "Convert" ? "VHDX images (*.vhdx)|*.vhdx" : "Recovery information (*.json)|*.json",
-                    DefaultExt = operation == "Convert" ? "vhdx" : "json", AddExtension = true, OverwritePrompt = false,
+                    Title = "Export optional recovery file",
+                    Filter = "Recovery file (*.json)|*.json",
+                    DefaultExt = "json", AddExtension = true, OverwritePrompt = false,
                     InitialDirectory = Path.GetDirectoryName(this.FilePath),
-                    FileName = operation == "Convert" ? Path.GetFileNameWithoutExtension(this.FilePath) + ".vhdx" : Path.GetFileName(this.FilePath) + ".recovery.json"
+                    FileName = Path.GetFileName(this.FilePath) + ".recovery.json"
                 }) {
                     if (save.ShowDialog(this) != DialogResult.OK) { return; }
                     target = save.FileName;
                 }
-                if (File.Exists(target) || Directory.Exists(target)) { Medo.MessageBox.ShowWarning(this, "The destination already exists. Choose a new name; existing files are never replaced."); return; }
-                if (operation == "Convert" && !string.Equals(Path.GetDirectoryName(this.FilePath), Path.GetDirectoryName(Path.GetFullPath(target)), StringComparison.OrdinalIgnoreCase)) {
-                    Medo.MessageBox.ShowWarning(this, "Choose a VHDX filename in the same folder as the VSUX image."); return;
-                }
             }
-            if (operation != "Backup") {
-                var question = operation == "Convert"
-                    ? "This removes soft protection, removes its embedded password record and renames the detached image to .vhdx. Ordinary tools can then mount it without a password. Disk files and partitions stay in place; any old JSON file is kept.\n\nThis writes container metadata. Keep a full backup. Continue?"
-                    : "This stores password information inside the detached image so it can travel without its JSON companion. The existing JSON file is kept.\n\nThis writes container metadata. Keep a full backup. Continue?";
-                if (Medo.MessageBox.ShowQuestion(this, question, MessageBoxButtons.YesNo) != DialogResult.Yes) { return; }
+            if (target != null && (File.Exists(target) || Directory.Exists(target))) {
+                if (operation == "Convert") { Medo.MessageBox.ShowError(this, "File already exists"); }
+                else { Medo.MessageBox.ShowWarning(this, "The destination already exists. Choose a new name; existing files are never replaced."); }
+                return;
+            }
+            if (operation == "Portable") {
+                if (Medo.MessageBox.ShowQuestion(this, "This stores password information inside the detached image so the image can travel by itself. The original recovery file is kept.\n\nThis writes container metadata. Keep a full backup. Continue?", MessageBoxButtons.YesNo) != DialogResult.Yes) { return; }
             }
             this.IsBusy = true;
             this.Page.Enabled = false;
@@ -120,7 +120,7 @@ namespace VhdAttach {
                     this.DialogResult = DialogResult.OK;
                     this.Close();
                 } else if (operation == "Backup") {
-                    Medo.MessageBox.ShowInformation(this, "Recovery information exported. Keep a full backup separately; this JSON file is optional for normal use and standalone recovery.");
+                    Medo.MessageBox.ShowInformation(this, "Recovery file exported. Keep a full backup separately; this file is optional for normal use and standalone recovery.");
                 }
             } finally {
                 this.IsBusy = false;

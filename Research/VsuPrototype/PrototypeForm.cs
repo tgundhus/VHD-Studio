@@ -38,7 +38,7 @@ internal sealed class PrototypeForm : Form {
         Shown += (_, _) => heading.Font = new Font(Font.FontFamily, 16F * DeviceDpi / 96F, FontStyle.Bold);
         layout.Controls.Add(heading, 0, 0);
         layout.Controls.Add(new Label {
-            Text = "Use disposable VHDX images only. New VSUX stores password information inside VHDX metadata and needs no JSON companion. Protection updates metadata; raw lock/unlock changes only eight signature bytes. Disk data stays unencrypted.",
+            Text = "Use disposable VHDX images only. New VSUX stores password information inside this file. Protection updates metadata; raw lock/unlock changes only eight signature bytes. Disk data stays unencrypted.",
             AutoSize = true, Dock = DockStyle.Fill, MaximumSize = new Size(1100, 0), Margin = new Padding(0, 0, 0, 16)
         }, 0, 1);
         layout.Controls.Add(new Label { Text = "VSUX &file", AutoSize = true, Margin = Padding.Empty }, 0, 2);

@@ -59,6 +59,10 @@ SolidCompression=yes
 ChangesAssociations=yes
 DisableWelcomePage=yes
 LicenseFile=..\..\Setup\License.rtf
+#ifdef SignFile
+SignTool=VhdStudioSignFile
+SignedUninstaller=yes
+#endif
 
 
 [Messages]

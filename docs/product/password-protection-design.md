@@ -4,24 +4,32 @@ title: Password-protected virtual disks
 scope: VHD-Studio/encryption
 specificity: specific
 credibility: inferred
-generated: {at: 2026-10-10, by: agent}
-sources: [docs/PROPOSAL.md, Source/VhdAttach-Service/VirtualDiskImage.cs, CHANGELOG.md]
-links: [../SAFETY.md]
+generated: {at: 2026-10-23, by: agent}
+sources: [docs/PROPOSAL.md, docs/VSUX.md, Source/VhdStudio.Vsux/VsuxOperations.cs, CHANGELOG.md]
+links: [../SAFETY.md, ../VSUX.md]
 ---
 
 # Password-protected virtual disks
 
 ## Summary
-Proposal, not built. To password-protect a disk, turn on BitLocker for the volume inside the VHD or
-VHDX, and let VHD Studio create, unlock and auto-mount such disks. A lock that doesn't encrypt can't
-meet the requirement below, because the data stays readable in the file.
+VHD Studio 5.1.0 ships the experimental [VSUX mount lock](../VSUX.md) for a revised requirement:
+leave the data unencrypted while preventing ordinary users and generic tools from mounting a locked
+image, including on another PC. The maintainer explicitly accepted that specialists can bypass it.
+VSUX changes only the eight VHDX signature bytes and uses an adjacent password-verifier companion.
+Attach prompts for the password; Detach & lock safely detaches first. Independent recovery restores
+the public signature without a password. This is a convenience barrier, not confidentiality.
+
+The earlier requirement below was stronger. The BitLocker integration described here remains an
+unbuilt proposal for that confidentiality goal. An unencrypted lock cannot meet it because the data
+stays readable in the file. VSUX does not promise zero corruption risk or automatic relocking after
+an interrupted session; see its usage guide and the safety model.
 
 ## Requirements (maintainer, 2026-10-10)
 1. No software can open the disk's contents without the password.
 2. Opening stays fast.
 3. No slow whole-file encrypt/decrypt pass and no added risk of corrupting data.
 
-## Options evaluated
+## Options evaluated for the original requirement
 | Option | Meets 1? | Why |
 |---|---|---|
 | Custom wrapper or scrambled header (own extension) | No | The data blocks stay plaintext. VHDX keeps two header copies and two region tables, so restoring a header or carving files from the raw bytes recovers the data. Rewriting headers in place is itself a corruption risk. |

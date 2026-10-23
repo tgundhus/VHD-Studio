@@ -80,8 +80,8 @@ Run the assembly commands from the workflow with `_site` pointing to a temporary
   those change, update `site/index.html` in the same change.
 - The FAQ answers in the `FAQPage` JSON-LD must match the visible FAQ text (arrows and curly quotes
   aside). Google requires structured data to describe content visible on the page.
-- Installer sizes ("about 36 MB", "about 2.4 MB") are hard-coded from `README.md` and must be updated
-  by hand.
+- Installer cards describe whether the main app runtime is embedded or shared. Both packages include
+  a self-contained recovery tool; avoid size estimates that become stale when its runtime changes.
 - No ratings or reviews in the structured data unless they are real.
 - Download links go to `/releases/latest`, not to versioned asset URLs, so they never point at a file
   that doesn't exist.

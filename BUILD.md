@@ -6,6 +6,7 @@
   any editor and `dotnet` work.
 * [Inno Setup 6](https://jrsoftware.org/isinfo.php), only needed for the installer.
 * Windows SDK `signtool.exe`, only needed for code signing.
+* The configured `sign-file` command, for the release signing workflow below.
 
 
 #### Build and test ####
@@ -13,8 +14,8 @@
     dotnet build Source\VhdStudio.sln
     dotnet test  Source\VhdStudio.sln
 
-Some tests create a small temporary VHDX and read the local disk layout (read-only). They need
-no administrator rights.
+The default tests include disposable VHDX files and read-only disk-layout queries. The elevated
+data-safety suite also attaches and formats its own disposable disks; run it as an administrator.
 
 
 #### Run from source ####
@@ -32,6 +33,8 @@ with an interactive password prompt; they do not require the service or pass pas
     Setup\Publish.ps1                                  # test, publish to .\Publish\VhdStudio, build installer
     Setup\Publish.ps1 -SkipInstaller                   # binaries only
     Setup\Publish.ps1 -CertificateThumbprint <sha1>    # also sign executables and setup
+    Setup\Publish.ps1 -SignFile                       # sign with the configured sign-file command
+    Setup\Publish.ps1 -SignFile -SelfContained        # signed installer with embedded runtime
 
 The installer is written to `Releases\vhdstudio-<version>-setup.exe`. Set the version in
 `Source\Directory.Build.props`.
@@ -53,8 +56,14 @@ runtime dependency on the VHD Studio UI, service, password verifier or companion
 
 #### Continuous integration ####
 
-`.github/workflows/build.yml` builds, tests and packages every push. Pushing a tag such as
-`v5.0.0` creates a GitHub release with the installer attached.
+`.github/workflows/build.yml` builds, tests and packages pushes to `master`, pull requests and
+manual runs. It uploads both installers as workflow artifacts. It does not create a GitHub release.
+
+For a release, update `Source\Directory.Build.props` and `CHANGELOG.md`, run the checks, and build
+both packages with `-SignFile` (the second with `-SelfContained`). Verify the Authenticode signatures
+of the application, service, VSUX library, recovery tool and both installers. Commit and push the
+release source, then create a matching tag and GitHub release with both signed installers attached.
+Use the changelog for the release notes, including VSUX's experimental status and recovery limits.
 
 
 #### Project layout ####

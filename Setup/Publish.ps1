@@ -5,21 +5,25 @@
 .DESCRIPTION
     1. dotnet test (unless -SkipTests)
     2. dotnet publish into ..\Publish\VhdStudio (win-x64), including standalone VSUX recovery
-    3. optional Authenticode signing (-CertificateThumbprint)
+    3. optional Authenticode signing (-SignFile or -CertificateThumbprint)
     4. ISCC.exe Setup\VhdStudio.iss -> ..\Releases\vhdstudio-<version>-setup.exe
 
 .EXAMPLE
     .\Publish.ps1
 .EXAMPLE
     .\Publish.ps1 -CertificateThumbprint 0123abcd... -TimestampUrl http://timestamp.digicert.com
+.EXAMPLE
+    .\Publish.ps1 -SignFile -SelfContained
 #>
 [CmdletBinding()]
 param(
     [string] $Configuration = 'Release',
     [string] $CertificateThumbprint,
+    [switch] $SignFile,        #use the configured sign-file command (signs and verifies with a timestamp)
     [string] $TimestampUrl = 'http://timestamp.digicert.com',
     [switch] $SkipTests,
     [switch] $SkipInstaller,
+    [string] $InnoCompiler,
     [switch] $SelfContained     #embed the .NET runtime (standalone installer, no prerequisite)
 )
 
@@ -28,6 +32,22 @@ $root = Split-Path -Parent $PSScriptRoot
 $solution = Join-Path $root 'Source\VhdStudio.sln'
 $publishDir = [IO.Path]::GetFullPath((Join-Path $root 'Publish\VhdStudio'))
 $releaseDir = Join-Path $root 'Releases'
+
+if ($SignFile -and $CertificateThumbprint) { throw 'Choose -SignFile or -CertificateThumbprint, not both.' }
+if ($SignFile) { $signFileCommand = (Get-Command sign-file -ErrorAction Stop).Source }
+
+function Invoke-SignFile([string] $FilePath) {
+    & $signFileCommand $FilePath
+    if ($LASTEXITCODE -ne 0) { throw "sign-file failed for $FilePath (exit code $LASTEXITCODE)." }
+    Assert-Signature $FilePath
+}
+
+function Assert-Signature([string] $FilePath) {
+    $signature = Get-AuthenticodeSignature -LiteralPath $FilePath
+    if ($signature.Status -ne 'Valid' -or -not $signature.TimeStamperCertificate) {
+        throw "A valid timestamped signature is required: $FilePath ($($signature.Status))"
+    }
+}
 
 function Invoke-Step([string] $Title, [scriptblock] $Action) {
     Write-Host "--- $Title" -ForegroundColor Cyan
@@ -67,7 +87,12 @@ Invoke-Step 'Publish' {
     dotnet publish (Join-Path $root 'Research\VsuPrototype\Recovery\VsuRecover.csproj') -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=true -o (Join-Path $publishDir 'Recovery') --nologo
 }
 
-if ($CertificateThumbprint) {
+if ($SignFile) {
+    Invoke-Step 'Sign executables and product libraries with sign-file' {
+        Get-ChildItem $publishDir -Include 'VhdStudio*.exe', 'VhdStudio*.dll', 'VsuRecover.exe' -Recurse |
+            ForEach-Object { Invoke-SignFile $_.FullName }
+    }
+} elseif ($CertificateThumbprint) {
     Invoke-Step 'Sign executables' {
         $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
         if (-not $signtool) { throw 'signtool.exe not found (install the Windows SDK).' }
@@ -77,7 +102,10 @@ if ($CertificateThumbprint) {
 }
 
 if (-not $SkipInstaller) {
-    $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe", "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+    $iscc = $InnoCompiler
+    if (-not $iscc) {
+        $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe", "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+    }
     if (-not $iscc) { $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source }
     if (-not $iscc) { throw 'Inno Setup 6 (ISCC.exe) not found. Install it from https://jrsoftware.org/isinfo.php or run with -SkipInstaller.' }
 
@@ -85,10 +113,20 @@ if (-not $SkipInstaller) {
         New-Item -ItemType Directory -Force $releaseDir | Out-Null
         $defines = @("/DVersionHash=$hash")
         if ($SelfContained) { $defines += '/DSelfContained' }
+        if ($SignFile) {
+            $defines += '/DSignFile'
+            # Inno expands $q to a quote and $f to the quoted file path.
+            $defines += '/SVhdStudioSignFile=$q' + $env:ComSpec + '$q /d /c $q$q' + $signFileCommand + '$q $f$q'
+        }
         & $iscc @defines (Join-Path $PSScriptRoot 'VhdStudio.iss')
     }
 
-    if ($CertificateThumbprint) {
+    if ($SignFile) {
+        Invoke-Step 'Verify signed installer' {
+            $setup = Get-ChildItem $releaseDir -Filter 'vhdstudio-*-setup*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            Assert-Signature $setup.FullName
+        }
+    } elseif ($CertificateThumbprint) {
         Invoke-Step 'Sign installer' {
             $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
             $setup = Get-ChildItem $releaseDir -Filter 'vhdstudio-*-setup*.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1

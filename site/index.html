@@ -54,32 +54,58 @@
     {
       "@type": "Question",
       "name": "Does VHD Studio need Hyper-V?",
-      "acceptedAnswer": { "@type": "Answer", "text": "No. VHD Studio uses VirtDisk.dll and the Storage Management API, which are part of every Windows 10 and 11 edition, including Home. The Hyper-V PowerShell module is not needed." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. VHD Studio uses VirtDisk.dll and the Storage Management API, which are part of every Windows 10 and 11 edition, including Home. The Hyper-V PowerShell module is not needed."
+      }
     },
     {
       "@type": "Question",
       "name": "How do I compact a WSL or Docker ext4.vhdx file?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Run fstrim inside the Linux distribution so freed space is zeroed, then open the ext4.vhdx in VHD Studio and choose Maintenance, Compact, Zeroed blocks only. VHD Studio can run wsl --shutdown first to release the file, and shows the size before and after." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Run fstrim inside the Linux distribution so freed space is zeroed, then open the ext4.vhdx in VHD Studio and choose Maintenance → Compact → Zeroed blocks only. VHD Studio can run wsl --shutdown first to release the file, and shows the size before and after."
+      }
     },
     {
       "@type": "Question",
       "name": "How do I auto-mount a VHD or VHDX at startup?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Open the disk in VHD Studio and turn on auto-mount from the toolbar. The VHD Studio service re-attaches it at every boot, optionally read-only, without a drive letter, or mounted into an empty folder. This also works for Dev Drive VHDX files, which Windows does not re-attach on its own." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Open the disk in VHD Studio and turn on auto-mount from the toolbar. The VHD Studio service re-attaches it at every boot, optionally read-only, without a drive letter, or mounted into an empty folder. This also works for Dev Drive VHDX files, which Windows does not re-attach on its own."
+      }
     },
     {
       "@type": "Question",
-      "name": "Why does my VHDX give \"Access denied\" after a crash?",
-      "acceptedAnswer": { "@type": "Answer", "text": "A VHDX that was not closed cleanly, for example after a crash or power loss, has a log that has not been replayed, and Windows refuses to attach it. VHD Studio detects the pending log and replays it so the disk attaches normally. A read-only attach never writes to the file; it points you to Repair, Replay log, which makes a backup first." }
+      "name": "Why does my VHDX give “Access denied” after a crash?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A VHDX that was not closed cleanly, for example after a crash or power loss, has a log that has not been replayed, and Windows refuses to attach it. VHD Studio detects the pending log and replays it so the disk attaches normally. A read-only attach never writes to the file; it points you to Repair → Replay log, which makes a backup first."
+      }
     },
     {
       "@type": "Question",
       "name": "Is VHD Studio the same as VHD Attach?",
-      "acceptedAnswer": { "@type": "Answer", "text": "VHD Studio is the successor to VHD Attach by Josip Medved, who maintained versions 1.0 to 4.22 from 2009 to 2020. VHD Studio 5 keeps his attach engine and auto-mount service and adds maintenance tools, a Disk Manager and data-safety hardening. Setup removes VHD Attach 4.x automatically and keeps your auto-mount list." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "VHD Studio is the successor to VHD Attach by Josip Medved, who maintained versions 1.0 to 4.22 from 2009 to 2020. VHD Studio 5 keeps his attach engine and auto-mount service and adds maintenance tools, a Disk Manager and data-safety hardening. Setup removes VHD Attach 4.x automatically and keeps your auto-mount list."
+      }
     },
     {
       "@type": "Question",
       "name": "Is VHD Studio free?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. VHD Studio is free and open source under the MIT license. The source code is on GitHub." }
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. VHD Studio is free and open source under the MIT license. The source code is on GitHub."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does VSUX encrypt my disk?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "No. VSUX is an experimental mount lock that changes only the eight VHDX signature bytes and prompts for a password in VHD Studio. The data stays unencrypted, and specialists or the supplied recovery tool can bypass the lock. Keep the .vsux.json companion beside the image and a full backup; an interrupted session can leave it unlocked. VSUX attach and detach-and-lock require administrator approval."
+      }
     }
   ]
 }
@@ -300,7 +326,7 @@ footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
       </article>
       <article class="card">
         <h3><span class="n">02</span>Auto-mount VHD and VHDX at startup</h3>
-        <p>Windows forgets attached disks on reboot, Dev Drive VHDX files included. A small Windows service re-attaches them at boot: read-only, without a drive letter, or mounted into an empty folder. Users without admin rights can attach disks they have access to.</p>
+        <p>Windows forgets attached disks on reboot, Dev Drive VHDX files included. A small Windows service re-attaches them at boot: read-only, without a drive letter, or mounted into an empty folder. Ordinary disks remember their last drive letter and avoid network and subst drives. Users without admin rights can attach ordinary disks they have access to.</p>
       </article>
       <article class="card">
         <h3><span class="n">03</span>Fix “Access denied” after a crash</h3>
@@ -317,6 +343,12 @@ footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
       <article class="card">
         <h3><span class="n">06</span>A DiskPart GUI that's hard to misuse</h3>
         <p>Initialize, partition, format, extend and shrink, assign letters and folder mounts. System and boot disks can't be changed, physical disks stay read-only until you unlock them, and every change shows the equivalent PowerShell command first.</p>
+      </article>
+      <article class="card">
+        <h3><span class="n">07</span>VSUX password prompt (experimental)</h3>
+        <p>Choose Maintenance → Protect as VSUX… for a detached standalone VHDX, then enter its password when you click Attach. Detach &amp; lock flushes, locks and dismounts its volumes first; open files stop it. Both actions request administrator approval. VSUX has no auto-mount or Maintenance.</p>
+        <p>The data stays unencrypted. Only eight signature bytes change, blocking ordinary mounting while locked, including on another PC. Specialists can bypass the lock. Keep the .vsux.json companion beside the image; an interrupted session can leave it unlocked, and power loss during a signature write carries risk.</p>
+        <p>Both installers include the independent, self-contained VsuRecover.exe. It validates a detached image and restores only the eight signature bytes without a password or companion file. <a href="https://github.com/tgundhus/VHD-Studio/blob/master/docs/VSUX.md">Read the usage and recovery guide</a>.</p>
       </article>
     </div>
   </div>
@@ -344,11 +376,11 @@ footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
   <div class="wrap split">
     <div class="section-head">
       <h2>Built not to lose your data</h2>
-      <p>No action in VHD Studio loses data unless you chose a destructive action and confirmed it. An end-to-end test suite checks the data on real virtual disks byte for byte after every operation.</p>
+      <p>VHD Studio refuses unsafe operations and verifies the data on real virtual disks in its end-to-end test suite. Experimental VSUX writes still carry power-loss risk; keep a full backup before using it.</p>
       <p><a href="https://github.com/tgundhus/VHD-Studio/blob/master/docs/SAFETY.md">Read the full data-safety model</a></p>
     </div>
     <ul class="checks">
-      <li>A verified backup before every in-place change: the checksum is re-read from disk, and Windows must be able to open the backup as a virtual disk.</li>
+      <li>A verified backup before in-place Maintenance changes: the checksum is re-read from disk, and Windows must be able to open the backup as a virtual disk. VSUX retains recovery diagnostics, not a full backup.</li>
       <li>Disks that are attached, in use, or changed since you selected them are refused, not guessed at.</li>
       <li>New disks, conversions and backups never replace an existing file.</li>
       <li>System, boot, page-file and image-hosting disks are protected.</li>
@@ -401,18 +433,18 @@ footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
   <div class="wrap">
     <div class="section-head">
       <h2>Download VHD Studio __VERSION__</h2>
-      <p>Pick an installer from the <a href="https://github.com/tgundhus/VHD-Studio/releases/latest">latest release on GitHub</a>. Both install the same app.</p>
+      <p>Pick an installer from the <a href="https://github.com/tgundhus/VHD-Studio/releases/latest">latest release on GitHub</a>. Both install the same app. The application, service, VSUX library, recovery tool and both release installers are Authenticode-signed.</p>
     </div>
     <div class="dl">
       <article class="card">
         <h3>vhdstudio-__VERSION__-setup-standalone.exe</h3>
-        <p class="size">About 36 MB</p>
+        <p class="size">Embedded app runtime</p>
         <p>Use this if you just want it to work. .NET is embedded, so there's nothing else to install.</p>
       </article>
       <article class="card">
         <h3>vhdstudio-__VERSION__-setup.exe</h3>
-        <p class="size">About 2.4 MB</p>
-        <p>For centrally managed machines. Uses the shared .NET 10 Desktop Runtime (x64), which Windows Update, WSUS or Intune keep patched. Setup links to it if it's missing.</p>
+        <p class="size">Shared app runtime</p>
+        <p>For centrally managed machines. The main app uses the shared .NET 10 Desktop Runtime (x64), which Windows Update, WSUS or Intune keep patched. Setup links to it if it's missing. Recovery always has its own embedded runtime.</p>
       </article>
     </div>
     <p class="req">Requires Windows 10 1809 or later, or Windows 11 (x64). Works on Home, Pro and Enterprise.</p>
@@ -451,6 +483,10 @@ footer nav { display: flex; flex-wrap: wrap; gap: 18px; }
       <div>
         <h3>Is VHD Studio free?</h3>
         <p>Yes. VHD Studio is free and open source under the MIT license. The source code is on <a href="https://github.com/tgundhus/VHD-Studio">GitHub</a>.</p>
+      </div>
+      <div>
+        <h3>Does VSUX encrypt my disk?</h3>
+        <p>No. VSUX is an experimental mount lock that changes only the eight VHDX signature bytes and prompts for a password in VHD Studio. The data stays unencrypted, and specialists or the supplied recovery tool can bypass the lock. Keep the .vsux.json companion beside the image and a full backup; an interrupted session can leave it unlocked. VSUX attach and detach-and-lock require administrator approval.</p>
       </div>
     </div>
   </div>

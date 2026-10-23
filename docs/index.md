@@ -15,6 +15,7 @@ Read this when you want to know where VHD Studio's documentation lives and which
 |---|---|
 | What does it do, or what is planned? | [product/](product/index.md): feature designs and proposals |
 | How is it kept safe? | [SAFETY.md](SAFETY.md): the data-safety model, safeguards by area and how they are tested |
+| How do I use or recover VSUX? | [VSUX.md](VSUX.md): experimental password prompts, safe detach and standalone recovery |
 | How do we run it? | [operations/](operations/index.md): website deployment and search indexing |
 | Why is it this way? | [decisions/](decisions/index.md): numbered decision records |
 | What changed in the docs? | [log.md](log.md) |

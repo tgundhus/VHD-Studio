@@ -49,6 +49,8 @@ VHD Studio is developed by **Tobias Gundhus ([xGND Software](https://github.com/
 * **Safe detach.** Volumes are flushed and locked before a disk is detached. If files are still open,
   you get the choice to retry instead of losing unsaved data.
 * Mapped network drives are translated to UNC paths so the service can reach them.
+* Each ordinary disk remembers its last drive letter. Attach restores it when available and avoids
+  letters used by network and `subst` drives, including remembered network connections.
 
 ### VSUX password prompt (experimental)
 
@@ -113,15 +115,19 @@ Disk Manager is available from the toolbar (`Ctrl+D`), the Start menu, or `VhdSt
 ## Data safety
 
 VHD Studio is built so that you don't lose data by accident. It never replaces existing files, makes
-verified backups before in-place changes, protects system, boot, page-file and image-hosting disks,
+verified backups before in-place Maintenance changes, protects system, boot, page-file and image-hosting disks,
 re-checks every disk before changing it, refuses to touch volumes with open files, and logs every
 change to `%ProgramData%\xGND Software\VHD Studio\Logs`. The full model is in [docs/SAFETY.md](docs/SAFETY.md).
 An end-to-end test suite verifies the data on real virtual disks byte for byte after every operation.
+VSUX writes only its eight signature bytes and retains recovery diagnostics in the companion file;
+it does not make a full backup. Keep one before adopting this experimental format.
 
 
 ## Installation
 
 Download one of the installers from [Releases](https://github.com/tgundhus/VHD-Studio/releases):
+
+The application, service, VSUX library, recovery tool and both release installers are Authenticode-signed.
 
 | Installer | Use it when |
 |---|---|

@@ -1,5 +1,25 @@
 # Changelog
 
+## 5.1.0
+
+### New
+- **VSUX password prompt (experimental).** Protect a detached standalone VHDX with
+  **Maintenance → Protect as VSUX…**, then enter its password when choosing **Attach**.
+  The data stays unencrypted: only the eight signature bytes change, blocking ordinary mounting
+  while locked, including on another PC. This convenience barrier can be bypassed by restoring
+  the public signature. Keep the `.vsux.json` companion beside the image.
+- **Detach & lock** flushes, locks and dismounts VSUX volumes before detaching and restoring the
+  mount lock. Open files stop the operation; there is no force-detach option. VSUX requests
+  administrator approval and is excluded from auto-mount and Maintenance.
+- Setup includes the independent, self-contained **VsuRecover.exe**. It validates a detached image
+  and restores only the eight signature bytes, without a password or companion file. An interrupted
+  session can leave a disk unlocked, and signature writes still carry power-loss risk; keep a full backup.
+
+### Release
+- The application, service, VSUX library, recovery tool and both installers are Authenticode-signed
+  using `sign-file`. The standard installer uses the shared .NET 10 Desktop Runtime; the standalone
+  installer embeds it. Recovery embeds its runtime in both packages.
+
 ## 5.0.3
 
 ### Improved

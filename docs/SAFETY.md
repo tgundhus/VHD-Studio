@@ -17,7 +17,8 @@ and change-approval boards.
    operation that modifies an existing file offers a backup, enabled by default whenever there is
    enough free space. The backup is stored plainly (never compressed, encrypted or sparse, whatever the
    folder settings). Its XXH128 checksum must match the source when re-read from disk, bypassing the
-   cache. Windows must also be able to open it as a virtual disk.4. **Refuse rather than guess.** Operations stop when a disk is attached, in use, changed since it
+   cache. Windows must also be able to open it as a virtual disk.
+4. **Refuse rather than guess.** Operations stop when a disk is attached, in use, changed since it
    was selected, protected, or short of space. In every one of these cases nothing is changed.
 5. **Only interrupt what is safe to interrupt.** Compact, convert and backup can be cancelled.
    Resize, merge and metadata changes cannot be cancelled once started.

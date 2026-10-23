@@ -47,3 +47,20 @@ Read this when you want to know what changed in the documentation and when. Appe
 
 ## 2026-10-22
 - Version 5.0.3: the changelog's "Unreleased" section became 5.0.3.
+
+## 2026-10-23
+- Added [VSUX.md](VSUX.md) and its documentation/product index entries for the shipped experimental
+  mount lock: password prompts, safe detach, companion portability, eight-byte writes, standalone
+  recovery and disposable-image verification. Updated [SAFETY.md](SAFETY.md) with its safeguards and
+  limits, including read-only signature writes and interrupted sessions; corrected a joined list line.
+- Updated [product/password-protection-design.md](product/password-protection-design.md) to distinguish
+  the revised unencrypted mount-deterrence requirement from the original confidentiality goal.
+  The BitLocker integration remains a proposal; VSUX is shipped in 5.1.0.
+- Added the 5.1.0 section to [CHANGELOG.md](../CHANGELOG.md), retaining the 5.0.3 drive-letter changes.
+  Updated [README.md](../README.md) and [the website](../site/index.html) for VSUX, recovery, signed
+  releases and the retained drive-letter behavior; aligned the visible FAQ with its JSON-LD.
+- Updated [BUILD.md](../BUILD.md) for production staging, standalone recovery, `-SignFile` signing
+  and manual GitHub releases. Corrected its earlier claim that pushing a tag creates a release.
+  Updated [operations/website.md](operations/website.md) to avoid stale installer-size estimates.
+- Updated the [prototype guide](../Research/VsuPrototype/README.md) to describe its shared production
+  core and independent recovery checks rather than the earlier pre-integration state.

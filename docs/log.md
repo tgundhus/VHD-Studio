@@ -137,3 +137,17 @@ Read this when you want to know what changed in the documentation and when. Appe
 - Clarified in [VSUX.md](VSUX.md), [SAFETY.md](SAFETY.md), [README.md](../README.md),
   [the website](../site/index.html) and the [changelog](../CHANGELOG.md) that successfully
   converting back to VHDX also removes that file's unlock-session record.
+
+## 2026-10-26
+- Added the 5.2.3 [changelog](../CHANGELOG.md) for volume-inspection handles retained during
+  refreshes, which could prevent safe detach even after user files were closed. Updated
+  [SAFETY.md](SAFETY.md) for immediate query-handle disposal and enumeration cleanup on errors.
+- Added troubleshooting to [VSUX.md](VSUX.md) and [SAFETY.md](SAFETY.md): close the affected
+  main-window process, then use Explorer's **Detach and lock** action without reopening it.
+  Documented safe physical-device removal, full shutdown if Windows cannot safely eject, and
+  that shutdown does not automatically relock VSUX. No force-detach or mounted-device unplug
+  workaround is offered.
+- Clarified the 5.2.3 [changelog](../CHANGELOG.md), [VSUX troubleshooting](VSUX.md) and
+  [SAFETY.md](SAFETY.md) after a refusal persisted with the main window closed: the inspection
+  leak is one possible blocker, and the Explorer retry is diagnostic rather than a guaranteed
+  workaround. Other Windows volume blockers still need investigation when safe detach fails.

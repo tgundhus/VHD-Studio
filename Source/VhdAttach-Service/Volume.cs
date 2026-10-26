@@ -144,17 +144,18 @@ namespace VhdAttachCommon {
         }
 
         private static bool GetExtentInfo(string volumeNameWithoutSlash, out int diskNumber, out long startingOffset, out long extentLength) {
-            var volumeHandle = NativeMethods.CreateFile(volumeNameWithoutSlash, 0, NativeMethods.FILE_SHARE_READ | NativeMethods.FILE_SHARE_WRITE, IntPtr.Zero, NativeMethods.OPEN_EXISTING, 0, IntPtr.Zero);
-            if (volumeHandle.IsInvalid == false) {
-                var de = new NativeMethods.VOLUME_DISK_EXTENTS();
-                de.NumberOfDiskExtents = 1;
-                int bytesReturned = 0;
-                if (NativeMethods.DeviceIoControl(volumeHandle, NativeMethods.IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, IntPtr.Zero, 0, ref de, Marshal.SizeOf(de), ref bytesReturned, IntPtr.Zero)) {
-                    if (bytesReturned > 0) {
-                        diskNumber = de.Extents.DiskNumber;
-                        startingOffset = de.Extents.StartingOffset;
-                        extentLength = de.Extents.ExtentLength;
-                        return true;
+            using (var volumeHandle = NativeMethods.CreateFile(volumeNameWithoutSlash, 0, NativeMethods.FILE_SHARE_READ | NativeMethods.FILE_SHARE_WRITE, IntPtr.Zero, NativeMethods.OPEN_EXISTING, 0, IntPtr.Zero)) {
+                if (volumeHandle.IsInvalid == false) {
+                    var de = new NativeMethods.VOLUME_DISK_EXTENTS();
+                    de.NumberOfDiskExtents = 1;
+                    int bytesReturned = 0;
+                    if (NativeMethods.DeviceIoControl(volumeHandle, NativeMethods.IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, IntPtr.Zero, 0, ref de, Marshal.SizeOf(de), ref bytesReturned, IntPtr.Zero)) {
+                        if (bytesReturned > 0) {
+                            diskNumber = de.Extents.DiskNumber;
+                            startingOffset = de.Extents.StartingOffset;
+                            extentLength = de.Extents.ExtentLength;
+                            return true;
+                        }
                     }
                 }
             }
@@ -195,16 +196,16 @@ namespace VhdAttachCommon {
             var volumes = new List<Volume>();
 
             var sb = new StringBuilder(50);
-            var volumeSearchHandle = NativeMethods.FindFirstVolume(sb, sb.Capacity);
-            if (volumeSearchHandle.IsInvalid == false) {
-                do {
-                    var volume = new Volume(sb.ToString());
-                    if (volume.PhysicalDriveNumber == driveNumber) {
-                        volumes.Add(volume);
-                    }
-                } while (NativeMethods.FindNextVolume(volumeSearchHandle, sb, sb.Capacity));
+            using (var volumeSearchHandle = NativeMethods.FindFirstVolume(sb, sb.Capacity)) {
+                if (volumeSearchHandle.IsInvalid == false) {
+                    do {
+                        var volume = new Volume(sb.ToString());
+                        if (volume.PhysicalDriveNumber == driveNumber) {
+                            volumes.Add(volume);
+                        }
+                    } while (NativeMethods.FindNextVolume(volumeSearchHandle, sb, sb.Capacity));
+                }
             }
-            volumeSearchHandle.Close();
 
             volumes.Sort(
                 delegate(Volume volume1, Volume volume2) {

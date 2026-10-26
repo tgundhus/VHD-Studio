@@ -125,6 +125,25 @@ session can leave the normal VHDX signature available. After any interrupted or 
 check the state and use **Detach & lock**. Never assume that an image is locked because it
 has a `.vsux` filename.
 
+### Detach refuses even after files are closed
+
+VHD Studio 5.2.2 and earlier could retain volume-inspection handles during main-window
+refreshes and block its own safe detach. Version 5.2.3 closes those inspection handles
+immediately. This fixes one possible blocker; "Access denied" alone does not identify its cause.
+
+As a diagnostic retry on an earlier build, close the VHD Studio main window completely to
+release that process's handles. Without reopening it, right-click the `.vsux` backing file in
+Explorer and try **Detach and lock**. Close programs and Explorer windows using the mounted
+drive. If the refusal persists, other Windows volume blockers need investigation; closing
+VHD Studio does not guarantee that the drive can be detached. Wait for confirmed successful
+detach and lock before treating the image as locked.
+
+Do not force detach or unplug the physical backing drive while the virtual disk is mounted.
+Before disconnecting that physical drive, use Windows **Safely Remove Hardware** and wait for
+confirmation. If Windows cannot safely remove it, fully shut down Windows and wait until the
+computer is off before disconnecting it. Shutdown does not automatically relock VSUX: the file
+may remain unlocked, so check its state and use **Detach & lock** when next available.
+
 ## Format and write boundary
 
 The mount lock replaces bytes 0–7 with ASCII `vsuxlock` when locked. Unlock restores ASCII

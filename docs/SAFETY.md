@@ -93,6 +93,7 @@ retained for inspection and recovery; the user must not assume the partial resul
 | Risk | Safeguard or limit |
 |---|---|
 | Masking a disk while files remain open | Volumes must flush, lock and dismount before detach. Masking needs exclusive file access and validates the VHDX structures. VSUX has no force-detach path. |
+| VHD Studio's own inspection handles block safe detach | Volume extent queries close their handles before returning, including error paths. Volume enumeration also closes its search handle on errors. This removes one possible blocker from earlier builds; other Windows volume blockers can still prevent safe detach. |
 | Wrong password, missing or invalid credential record | Password operations validate the embedded record, or the original recovery file for the earlier format, against the image's stable identifier before changing the signature. An earlier image with a missing recovery file requires standalone recovery. |
 | First protection or migration loses the password metadata | Windows writes the VHDX user-metadata item, which is read back and verified before the image is masked and reported locked. Existing image destinations are never overwritten. Keep a full backup before the operation. |
 | Password exposure through service IPC, process arguments or logs | VSUX prompts in its elevated process and does not send passwords to the attach service or put them on the command line or in audit details. |
@@ -111,6 +112,17 @@ records, while still validating the generic VHDX metadata table, entry bounds an
 It refuses pending logs, differencing disks and invalid structures; it never repairs a filesystem
 or rolls back disk data.
 See [VSUX usage and recovery](VSUX.md).
+
+If an earlier build refuses **Detach & lock** after files are closed, a diagnostic retry is to
+close the VHD Studio main window completely and release that process's inspection handles.
+Without reopening it, try the `.vsux` file's Explorer context-menu **Detach and lock** action.
+If it still fails, other Windows volume blockers need investigation. A failed relock must not be
+bypassed by forcing detach or unplugging the physical backing drive while the virtual disk is mounted.
+For physical removal, use Windows **Safely Remove Hardware** and wait for confirmation; if
+Windows cannot safely remove the device, fully shut down and wait until the computer is off.
+Shutdown does not automatically relock a VSUX image. Check its state and relock it when next
+available. The [VSUX troubleshooting steps](VSUX.md#detach-refuses-even-after-files-are-closed)
+describe this diagnostic retry; it does not guarantee that the drive can be detached.
 
 ### Disk Manager (partitions and volumes)
 | Risk | Safeguard |

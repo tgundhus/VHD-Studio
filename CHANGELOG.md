@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.2.3
+
+### Fixed
+- Volume refreshes now close their inspection handles immediately, including on errors.
+  Those handles could block VHD Studio's own safe **Detach & lock**. Other Windows volume
+  blockers can still prevent safe detach and need investigation if the refusal persists.
+
 ## 5.2.2
 
 ### Improved

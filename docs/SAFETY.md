@@ -133,6 +133,34 @@ describe this diagnostic retry; it does not guarantee that the drive can be deta
 | Formatting, deleting or cleaning a volume with open files | Volumes must be lockable (no open handles) first. Format never uses `Force`. |
 | Concurrent or interrupted operations | One operation at a time, and the window cannot be closed while one runs. |
 
+## Headless automation
+
+The JSON CLI and local stdio MCP tools share operation checks. A user must explicitly grant a
+local image root and `--allow-write` for create, attach (including read-only attach) and safe
+detach. This bounded startup grant replaces repeated interactive confirmations for those actions
+only. Existing-image maintenance and arbitrary partition/physical-disk operations are not exposed.
+The root and capacity limits are API guardrails, not OS isolation for another process under the
+same account. Reparse paths, hard-linked images and out-of-root paths are refused.
+
+The service creates new files under the caller's Windows token and retains the exact create-new
+handle for optional GPT/NTFS preparation. The existing blankness and identity checks apply before
+formatting. Existing destinations are never overwritten. Safe detach has no force option.
+Attachment-state queries fail closed; an access/provider error is never interpreted as detached.
+The service rechecks the inspected image identifier on the opened handle before attach/detach and
+refuses pending-log replay for automation requests. A protocol handshake refuses older services
+that cannot enforce those checks. Failed creation retains partial images for inspection; a failed
+reply never proves a disk is detached.
+VSUX remains on its interactive password path.
+
+Mutation intent and results are stored under `.vhdstudio-operations` in the configured root.
+Repeating a request ID does not rerun the operation. Interrupted or timed-out requests remain
+unknown and block further mutations of that image until operator recovery; status includes a
+separate fresh inspection. Agent disconnection never forces detach or cancels unsafe work.
+Status readers permit atomic journal replacement and retain complete snapshots. Saved and incoming
+path spellings are normalized before checking unresolved requests, including 8.3 directory aliases.
+The service records caller-attributed creation, attachment and detachment in its audit log.
+See [the automation guide](product/automation.md) for policy, limitations and recovery.
+
 ## Audit log
 
 The log folder is created by the service at start-up with an Administrators/SYSTEM-only ACL. A folder

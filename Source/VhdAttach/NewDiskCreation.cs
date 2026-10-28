@@ -10,15 +10,23 @@ using VhdAttachCommon;
 namespace VhdAttach {
     /// <summary>Creates new image files, optionally ready to use as one NTFS data volume.</summary>
     internal static class NewDiskCreation {
-        internal static void Create(string fileName, long size, bool fixedSize, bool createSinglePartition = false) {
-            var target = Validate(fileName, size, createSinglePartition);
-            using (PathGuard.Open(Path.GetDirectoryName(target), directory: true, rejectHardLinks: false)) {
+        internal static void Create(string fileName, long size, bool fixedSize, bool createSinglePartition = false, Action<Action> runAsCaller = null) {
+            runAsCaller ??= action => action();
+            string target = null;
+            PathGuard directoryGuard = null;
+            runAsCaller(() => {
+                target = Validate(fileName, size, createSinglePartition);
+                directoryGuard = PathGuard.Open(Path.GetDirectoryName(target), directory: true, rejectHardLinks: false);
+            });
+            using (directoryGuard) {
                 try {
                     // Keep the create-new native handle until preparation and safe detach finish.
                     // Reopening the path after creation would permit a substituted file to be initialized.
                     using (var image = new VirtualDisk(target)) {
                         var format = Path.GetExtension(target).Equals(".vhdx", StringComparison.OrdinalIgnoreCase) ? VirtualDiskType.Vhdx : VirtualDiskType.Vhd;
-                        image.Create(size, fixedSize ? VirtualDiskCreateOptions.FullPhysicalAllocation : VirtualDiskCreateOptions.None, 0, 0, format);
+                        // The service must create the file as its caller, not as SYSTEM. The exact
+                        // create-new handle is then retained for privileged preparation below.
+                        runAsCaller(() => image.Create(size, fixedSize ? VirtualDiskCreateOptions.FullPhysicalAllocation : VirtualDiskCreateOptions.None, 0, 0, format));
                         if (createSinglePartition) { PrepareNewDisk(image, target); }
                     }
                 } catch (Exception error) {

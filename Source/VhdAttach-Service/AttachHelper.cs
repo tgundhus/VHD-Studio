@@ -16,8 +16,9 @@ namespace VhdAttachService {
         /// <param name="caller">User on whose behalf the service acts; PipeCaller.ForService() for boot-time auto-attach.</param>
         /// <param name="strictPaths">Also refuse hard-linked files (used for auto-attach entries, which non-admins may have added).</param>
         /// <param name="avoidLetters">Drive letters the user uses for network or subst drives (see DriveLetterMemory).</param>
+        /// <param name="refuseLogReplay">Refuse a pending VHDX log rather than replaying it during a writable attach.</param>
         /// <returns>Drive letter notices for the user (see DriveLetterMemory.Apply); empty if none.</returns>
-        public static string Attach(FileWithOptions file, PipeCaller caller, bool initializeDisk = false, bool strictPaths = false, ISet<char> avoidLetters = null) {
+        public static string Attach(FileWithOptions file, PipeCaller caller, bool initializeDisk = false, bool strictPaths = false, ISet<char> avoidLetters = null, bool refuseLogReplay = false, Guid? expectedImageId = null) {
             VsuxGuard.RefuseOrdinaryRoute(file.FileName);
             if (!File.Exists(file.FileName)) {
                 var missing = file.FileName;
@@ -28,11 +29,11 @@ namespace VhdAttachService {
             }
             using (var fileGuard = caller.GuardFile(file.FileName, (file.ReadOnly && !initializeDisk) ? FileAccess.Read : FileAccess.ReadWrite, strictPaths))
             using (var folderGuard = string.IsNullOrEmpty(file.MountFolder) ? null : caller.GuardMountFolder(file.MountFolder)) {
-                return AttachPinned(file, fileGuard?.FinalPath ?? file.FileName, folderGuard?.FinalPath, initializeDisk, caller, avoidLetters ?? new HashSet<char>());
+                return AttachPinned(file, fileGuard?.FinalPath ?? file.FileName, folderGuard?.FinalPath, initializeDisk, caller, avoidLetters ?? new HashSet<char>(), refuseLogReplay, expectedImageId);
             }
         }
 
-        private static string AttachPinned(FileWithOptions file, string path, string mountFolder, bool initializeDisk, PipeCaller caller, ISet<char> avoidLetters) {
+        private static string AttachPinned(FileWithOptions file, string path, string mountFolder, bool initializeDisk, PipeCaller caller, ISet<char> avoidLetters, bool refuseLogReplay, Guid? expectedImageId) {
             if (!File.Exists(path)) {
                 if (path.StartsWith(@"\\", StringComparison.Ordinal)) {
                     throw new FileNotFoundException(string.Format("Network file \"{0}\" is not reachable by the service. The service runs as Local System; give the computer account access to the share or change the service log-on account.", path), path);
@@ -41,6 +42,9 @@ namespace VhdAttachService {
             }
 
             if (VhdxHeader.NeedsLogReplay(path)) { //unclean shutdown; Windows refuses to open the file until the log is applied
+                if (refuseLogReplay || expectedImageId.HasValue) {
+                    throw new LogReplayRequiredException("The VHDX log must be repaired interactively before this automation attach can proceed. No log replay was requested.");
+                }
                 if (file.ReadOnly) { //a read-only request must never write to the file
                     throw new InvalidOperationException(string.Format("\"{0}\" was not closed cleanly and its log must be replayed before it can be attached. Read-only attach does not change the file; use Maintenance → Repair → Replay log (takes a backup first) or attach it read/write.", Path.GetFileName(path)));
                 }
@@ -71,6 +75,7 @@ namespace VhdAttachService {
                 } catch (IOException ex) when (!file.ReadOnly && ((File.GetAttributes(path) & FileAttributes.ReadOnly) != 0)) {
                     throw new IOException(string.Format("\"{0}\" has the read-only attribute (for example a protected differencing parent). Attach it read-only, or clear the attribute deliberately.", Path.GetFileName(path)), ex);
                 }
+                ValidateIdentifier(disk, expectedImageId);
                 disk.Attach(options);
                 if (initializeDisk || (mountFolder != null) || wantsLetters) { diskPath = disk.GetAttachedPath(); }
             }
@@ -100,18 +105,18 @@ namespace VhdAttachService {
         /// A disk attached read/write can only be detached by users with write access to its file;
         /// detaching while files are open (force) is reserved for administrators.
         /// </remarks>
-        public static void Detach(string path, bool force, PipeCaller caller) {
+        public static void Detach(string path, bool force, PipeCaller caller, Guid? expectedImageId = null) {
             VsuxGuard.RefuseOrdinaryRoute(path);
             if (force) { caller.DemandAdministrator("Detaching a disk with open files"); }
             var normalized = path.StartsWith(@"\\", StringComparison.Ordinal) ? path : PathGuard.GetLongPath(Path.GetFullPath(path));
             var attached = GetAttachedImages().FirstOrDefault(i => string.Equals(i.Location, normalized, StringComparison.OrdinalIgnoreCase) || string.Equals(i.Location, path, StringComparison.OrdinalIgnoreCase));
             var access = ((attached != null) && !attached.IsReadOnly) ? FileAccess.ReadWrite : FileAccess.Read;
             using (var guard = caller.GuardFile(path, access)) {
-                DetachPinned(guard?.FinalPath ?? path, force, caller, access);
+                DetachPinned(guard?.FinalPath ?? path, force, caller, access, expectedImageId);
             }
         }
 
-        private static void DetachPinned(string path, bool force, PipeCaller caller, FileAccess access) {
+        private static void DetachPinned(string path, bool force, PipeCaller caller, FileAccess access, Guid? expectedImageId) {
             using (var disk = new Medo.IO.VirtualDisk(path)) {
                 caller.RunAsCaller(() => { //bind to a file the caller can access before Local System acts on it
                     if (access == FileAccess.ReadWrite) {
@@ -123,8 +128,8 @@ namespace VhdAttachService {
                     }
                     disk.Open(Medo.IO.VirtualDiskAccessMask.Detach | Medo.IO.VirtualDiskAccessMask.GetInfo);
                 });
-                string physicalPath = null;
-                try { physicalPath = disk.GetAttachedPath(); } catch (IOException) { } catch (System.ComponentModel.Win32Exception) { }
+                ValidateIdentifier(disk, expectedImageId);
+                var physicalPath = GetPathForSafeDetach(disk.GetAttachedPath);
 
                 VolumeLock locks = null;
                 if (physicalPath != null) {
@@ -143,6 +148,18 @@ namespace VhdAttachService {
                     disk.Detach();
                 }
             }
+        }
+
+        private static void ValidateIdentifier(Medo.IO.VirtualDisk disk, Guid? expectedImageId) {
+            if (expectedImageId.HasValue && disk.GetIdentifier() != expectedImageId.Value) {
+                throw new ImageChangedException("The image identifier changed before the service could act. Inspect the image again; no attach or detach was performed.");
+            }
+        }
+
+        internal static string GetPathForSafeDetach(Func<string> query) {
+            try { return query(); }
+            catch (IOException) { return null; } // The native wrapper maps only ERROR_DEV_NOT_EXIST here.
+            // Other native query failures abort before any detach can bypass volume locking.
         }
 
         /// <summary>
@@ -209,6 +226,14 @@ namespace VhdAttachService {
             throw new InvalidOperationException(string.Format("Disk was attached but no volume appeared to mount at \"{0}\".", folder));
         }
 
+    }
+
+    internal sealed class LogReplayRequiredException : InvalidOperationException {
+        public LogReplayRequiredException(string message) : base(message) { }
+    }
+
+    internal sealed class ImageChangedException : InvalidOperationException {
+        public ImageChangedException(string message) : base(message) { }
     }
 
 }

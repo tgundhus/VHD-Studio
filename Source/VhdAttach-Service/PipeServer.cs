@@ -53,6 +53,13 @@ namespace VhdAttachService {
                 using (caller)
                 try {
                     switch (packet.Operation) {
+                        case "AutomationCapabilities":
+                            return GetResponse(packet);
+
+                        case "CreateImage":
+                            ReceivedCreateImage(packet, caller);
+                            return GetResponse(packet);
+
                         case "Attach":
                             return GetResponse(packet, ReceivedAttach(packet, caller));
 
@@ -100,6 +107,15 @@ namespace VhdAttachService {
 
 
 
+        private static void ReceivedCreateImage(TinyPacket packet, PipeCaller caller) {
+            if (!long.TryParse(packet["SizeBytes"], NumberStyles.None, CultureInfo.InvariantCulture, out var size)
+                || !bool.TryParse(packet["FixedSize"], out var fixedSize)
+                || !bool.TryParse(packet["CreateSinglePartition"], out var createSinglePartition)) {
+                throw new InvalidOperationException("Invalid image creation parameters.", new ArgumentException("SizeBytes, FixedSize and CreateSinglePartition are required."));
+            }
+            ImageCreation.Create(packet["Path"], size, fixedSize, createSinglePartition, caller);
+        }
+
         private static string ReceivedAttach(TinyPacket packet, PipeCaller caller) {
             try {
                 var file = new FileWithOptions(packet["Path"]) {
@@ -110,7 +126,8 @@ namespace VhdAttachService {
                 var shouldInitialize = packet["InitializeDisk"].Equals("True", StringComparison.OrdinalIgnoreCase);
                 var avoid = new HashSet<char>((packet["AvoidLetters"] ?? "").ToUpperInvariant().Where(c => (c >= 'A') && (c <= 'Z'))); //the user's network and subst drives
                 AuditLog.Started("Attach", file.ToString(), shouldInitialize ? "initialize new disk" : null, caller.Name);
-                var driveLetters = AttachHelper.Attach(file, caller, shouldInitialize, avoidLetters: avoid);
+                var refuseLogReplay = string.Equals(packet["RefuseLogReplay"], "True", StringComparison.OrdinalIgnoreCase);
+                var driveLetters = AttachHelper.Attach(file, caller, shouldInitialize, avoidLetters: avoid, refuseLogReplay: refuseLogReplay, expectedImageId: ExpectedImageId(packet));
                 AuditLog.Succeeded("Attach", file.ToString(), string.IsNullOrEmpty(driveLetters) ? null : "drive letters " + driveLetters, caller.Name);
                 return driveLetters;
             } catch (Exception ex) {
@@ -124,12 +141,19 @@ namespace VhdAttachService {
                 var path = packet["Path"];
                 var force = string.Equals(packet["Force"], "True", StringComparison.OrdinalIgnoreCase);
                 AuditLog.Started("Detach", path, force ? "force" : null, caller.Name);
-                AttachHelper.Detach(path, force, caller);
+                AttachHelper.Detach(path, force, caller, expectedImageId: ExpectedImageId(packet));
                 AuditLog.Succeeded("Detach", path, null, caller.Name);
             } catch (Exception ex) {
                 AuditLog.Failed("Detach", packet["Path"], ex, caller.Name);
                 throw new InvalidOperationException(string.Format("Virtual disk file \"{0}\" cannot be detached.", (new FileInfo(packet["Path"])).Name), ex);
             }
+        }
+
+        private static Guid? ExpectedImageId(TinyPacket packet) {
+            var value = packet["ExpectedImageId"];
+            if (string.IsNullOrEmpty(value)) { return null; }
+            if (!Guid.TryParseExact(value, "D", out var id)) { throw new ArgumentException("ExpectedImageId must be a GUID in D format."); }
+            return id;
         }
 
         private static void ReceivedDetachDrive(TinyPacket packet, PipeCaller caller) {
@@ -259,6 +283,7 @@ namespace VhdAttachService {
             var data = new Dictionary<string, string>();
             data.Add("IsError", false.ToString(CultureInfo.InvariantCulture));
             data.Add("Message", "");
+            data.Add("AutomationProtocol", "vhdx-workspaces-v1");
             if (!string.IsNullOrEmpty(driveLetters)) { data.Add("DriveLetters", driveLetters); }
             return new TinyPacket(packet.Product, packet.Operation, data);
         }
@@ -266,9 +291,18 @@ namespace VhdAttachService {
         public static TinyPacket GetResponse(TinyPacket packet, Exception ex) {
             var data = new Dictionary<string, string>();
             data.Add("IsError", true.ToString(CultureInfo.InvariantCulture));
+            data.Add("AutomationProtocol", "vhdx-workspaces-v1");
+            string errorCode = null;
             for (var inner = ex; inner != null; inner = inner.InnerException) {
-                if (inner is VolumeInUseException) { data.Add("ErrorCode", "InUse"); break; } //client offers retry / force
+                if (inner is ImageChangedException) { errorCode = "ImageChanged"; break; }
+                if (inner is LogReplayRequiredException) { errorCode = "LogReplayRequired"; break; }
+                if (inner is VolumeInUseException) { errorCode = "InUse"; break; } //client offers retry / force
+                if (inner is UnauthorizedAccessException || (inner is Win32Exception native && native.NativeErrorCode == 5)) { errorCode = "AccessDenied"; break; }
+                if (inner is FileNotFoundException || inner is DirectoryNotFoundException) { errorCode = "NotFound"; }
+                if (inner is ArgumentException) { errorCode = "InvalidArgument"; }
+                if (inner is Win32Exception exists && (exists.NativeErrorCode == 80 || exists.NativeErrorCode == 183)) { errorCode = "AlreadyExists"; }
             }
+            data.Add("ErrorCode", errorCode ?? "OperationFailed");
             if (ex.InnerException != null) {
                 data.Add("Message", ex.Message + "\r\n" + ex.InnerException.Message);
             } else {

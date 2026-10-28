@@ -100,6 +100,12 @@ callers and add an admin-managed allow-list mode for shared or RDS machines.
 
 ## 6. Roadmap
 
+The first agent-automation increment now provides a JSON CLI and local stdio MCP tools for
+scoped VHDX creation, inspection, attach, safe detach and request status. See
+[the automation guide](product/automation.md). General headless maintenance below remains future
+work; portable workspace manifests, differencing task templates and unattended VSUX credential
+integration are follow-on increments.
+
 ### P0: next release (5.1)
 * **Command-line maintenance**, e.g. `VhdStudio.exe /compact "disk.vhdx" [/zeroonly]`, `/resize`,
   `/convert`. This makes it usable for scheduled FSLogix/VDI/WSL clean-up and in scripts.

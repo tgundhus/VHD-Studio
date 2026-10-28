@@ -518,9 +518,14 @@ namespace Medo.IO {
         /// Gets unique identifier of the VHD.
         /// </summary>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1024:UsePropertiesWhereAppropriate", Justification = "Method does not behave as field.")]
-        public Guid GetIdentifier() {
+        public Guid GetIdentifier() => GetIdentifier(NativeMethods.GET_VIRTUAL_DISK_INFO_VERSION.GET_VIRTUAL_DISK_INFO_IDENTIFIER);
+
+        /// <summary>Gets the persistent VHDX metadata identity, which remains stable across writable sessions.</summary>
+        public Guid GetVirtualDiskId() => GetIdentifier(NativeMethods.GET_VIRTUAL_DISK_INFO_VERSION.GET_VIRTUAL_DISK_INFO_VIRTUAL_DISK_ID);
+
+        private Guid GetIdentifier(NativeMethods.GET_VIRTUAL_DISK_INFO_VERSION version) {
             var info = new NativeMethods.GET_VIRTUAL_DISK_INFO();
-            info.Version = NativeMethods.GET_VIRTUAL_DISK_INFO_VERSION.GET_VIRTUAL_DISK_INFO_IDENTIFIER;
+            info.Version = version;
 
             int size = Marshal.SizeOf(info);
             int sizeUsed = 0;
@@ -915,7 +920,10 @@ namespace Medo.IO {
                 /// <summary>
                 /// Subtype.
                 /// </summary>
-                GET_VIRTUAL_DISK_INFO_PROVIDER_SUBTYPE = 7
+                GET_VIRTUAL_DISK_INFO_PROVIDER_SUBTYPE = 7,
+
+                /// <summary>Persistent VHDX metadata identity (Windows 8.1 or later).</summary>
+                GET_VIRTUAL_DISK_INFO_VIRTUAL_DISK_ID = 14
             }
 
             /// <summary>

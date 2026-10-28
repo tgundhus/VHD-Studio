@@ -151,7 +151,7 @@ namespace VhdAttachService {
         }
 
         private static void ValidateIdentifier(Medo.IO.VirtualDisk disk, Guid? expectedImageId) {
-            if (expectedImageId.HasValue && disk.GetIdentifier() != expectedImageId.Value) {
+            if (expectedImageId.HasValue && (disk.DiskType == Medo.IO.VirtualDiskType.Vhdx ? disk.GetVirtualDiskId() : disk.GetIdentifier()) != expectedImageId.Value) {
                 throw new ImageChangedException("The image identifier changed before the service could act. Inspect the image again; no attach or detach was performed.");
             }
         }

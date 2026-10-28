@@ -168,3 +168,7 @@ Read this when you want to know what changed in the documentation and when. Appe
 - Updated [product/automation.md](product/automation.md), [SAFETY.md](SAFETY.md), and the Unreleased
   [changelog](../CHANGELOG.md) for journal reads that permit atomic replacement and normalized
   saved-path comparisons, with regression coverage for status snapshots and 8.3 directory aliases.
+- Documented the persistent VHDX image ID in [product/automation.md](product/automation.md),
+  [SAFETY.md](SAFETY.md) and the Unreleased [changelog](../CHANGELOG.md). The first service-backed
+  CI run exposed that the content-change ID becomes stale after writable use; automation now uses
+  the metadata disk ID while preserving maintenance/differencing identifiers.

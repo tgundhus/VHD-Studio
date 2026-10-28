@@ -209,7 +209,7 @@ namespace VhdAttach.Automation {
             EnsureKnownAttachmentState(details);
             if (details.Format != "VHDX") { throw new AutomationException("unsupported_format", "Only VHDX images are supported by automation."); }
             var image = new AutomationImage {
-                Path = path, ImageId = details.Identifier?.ToString("D"), Format = details.Format,
+                Path = path, ImageId = details.VirtualDiskId?.ToString("D"), Format = details.Format,
                 Kind = details.Kind.ToString(), VirtualSizeBytes = details.VirtualSize, PhysicalSizeBytes = details.PhysicalSize,
                 Attached = details.AttachedPath != null, PhysicalDrive = details.AttachedPath, NeedsLogReplay = details.NeedsLogReplay,
             };

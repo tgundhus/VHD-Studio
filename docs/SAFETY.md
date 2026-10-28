@@ -146,8 +146,9 @@ The service creates new files under the caller's Windows token and retains the e
 handle for optional GPT/NTFS preparation. The existing blankness and identity checks apply before
 formatting. Existing destinations are never overwritten. Safe detach has no force option.
 Attachment-state queries fail closed; an access/provider error is never interpreted as detached.
-The service rechecks the inspected image identifier on the opened handle before attach/detach and
-refuses pending-log replay for automation requests. A protocol handshake refuses older services
+The service rechecks the inspected persistent VHDX metadata ID on the opened handle before
+attach/detach; normal writable use does not invalidate the selection. It refuses pending-log replay
+for automation requests. A protocol handshake refuses older services
 that cannot enforce those checks. Failed creation retains partial images for inspection; a failed
 reply never proves a disk is detached.
 VSUX remains on its interactive password path.

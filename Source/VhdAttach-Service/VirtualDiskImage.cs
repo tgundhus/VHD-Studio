@@ -34,6 +34,8 @@ namespace VhdAttachCommon {
         public int? LogicalSectorSize { get; set; }
         public int? PhysicalSectorSize { get; set; }
         public Guid? Identifier { get; set; }
+        /// <summary>Persistent VHDX metadata ID; unlike Identifier, remains stable across writable sessions.</summary>
+        public Guid? VirtualDiskId { get; set; }
         public int? FragmentationPercentage { get; set; }
         public long? SmallestSafeVirtualSize { get; set; }
         public bool? Is4KAligned { get; set; }
@@ -119,6 +121,11 @@ namespace VhdAttachCommon {
 
                 buffer = GetInfo(handle, NativeMethods.GET_VIRTUAL_DISK_INFO_IDENTIFIER);
                 if (buffer != null) { details.Identifier = ReadGuid(buffer, 8); }
+
+                if (details.Format == "VHDX") {
+                    buffer = GetInfo(handle, NativeMethods.GET_VIRTUAL_DISK_INFO_VIRTUAL_DISK_ID);
+                    if (buffer != null) { details.VirtualDiskId = ReadGuid(buffer, 8); }
+                }
 
                 buffer = GetInfo(handle, NativeMethods.GET_VIRTUAL_DISK_INFO_VHD_PHYSICAL_SECTOR_SIZE);
                 if (buffer != null) { details.PhysicalSectorSize = BitConverter.ToInt32(buffer, 8); }
@@ -749,6 +756,7 @@ namespace VhdAttachCommon {
             public const int GET_VIRTUAL_DISK_INFO_SMALLEST_SAFE_VIRTUAL_SIZE = 11;
             public const int GET_VIRTUAL_DISK_INFO_FRAGMENTATION = 12;
             public const int GET_VIRTUAL_DISK_INFO_IS_LOADED = 13;
+            public const int GET_VIRTUAL_DISK_INFO_VIRTUAL_DISK_ID = 14;
 
             public const int SET_VIRTUAL_DISK_INFO_PARENT_PATH_VERSION = 1;
             public const int SET_VIRTUAL_DISK_INFO_IDENTIFIER_VERSION = 2;

@@ -103,6 +103,8 @@ agent needs a local worker or separately scoped file access to use Windows volum
 Supply a new GUID in `requestId` for each intended mutation and store it before submission. If
 omitted, the server generates and returns one, but an interrupted client might never receive it.
 `expectedImageId` accepts the GUID returned by inspection to reject a changed image identifier.
+It is the persistent VHDX metadata disk ID and stays valid across normal writable sessions.
+The separate content-change identifier used by maintenance and differencing chains is preserved.
 
 The root's `.vhdstudio-operations` directory stores intent before sending the service request and
 the final result afterward. Repeating the same ID and arguments returns the recorded result

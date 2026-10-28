@@ -11,6 +11,8 @@
   preparation. Timeouts and interrupted requests are recorded without automatically retrying.
 
 ### Fixed
+- Automation uses the persistent VHDX disk ID for image selection checks, so normal writable
+  use does not invalidate the ID returned by creation or inspection.
 - Automation status reads allow atomic journal replacement when an operation completes. Unresolved
   request checks normalize saved directory aliases before comparing image paths.
 - Safe detach aborts on unexpected native attachment-query errors instead of proceeding without

@@ -27,6 +27,14 @@ Attaching goes through the Windows service. To test the service without installi
 changes ask for elevation themselves. VSUX attach and detach-and-lock use an elevated helper
 with an interactive password prompt; they do not require the service or pass passwords on the command line.
 
+The headless JSON CLI and local MCP server build as `Source/VhdStudio.Automation`. Run
+`dotnet run --project Source\VhdStudio.Automation -- --help` for options. Its VHDX mutations need
+the matching service build; keep the automation process under the intended Windows user. Run
+`pwsh -File Source\VhdStudio.Automation\Smoke-Test.ps1` after building for CLI/MCP protocol checks.
+See [the automation guide](docs/product/automation.md) for explicit directory/write grants and
+the opt-in elevated end-to-end test. Publishing includes the automation executable and dependencies
+in both installer types.
+
 
 #### Installer ####
 
@@ -59,6 +67,10 @@ runtime dependency on the VHD Studio UI, service, password verifier or companion
 `.github/workflows/build.yml` builds, tests and packages pushes to `master`, pull requests and
 manual runs. It uploads both installers as workflow artifacts. It does not create a GitHub release.
 
+On normal builds CI also installs the just-built service on its disposable hosted runner, runs
+the opt-in native automation workflow, and removes that service before installer regressions.
+That step refuses to replace an existing service and never runs on a development machine.
+
 For a release, update `Source\Directory.Build.props` and `CHANGELOG.md`, run the checks, and build
 both packages with `-SignFile` (the second with `-SelfContained`). Verify the Authenticode signatures
 of the application, service, VSUX library, recovery tool and both installers. Commit and push the
@@ -85,5 +97,6 @@ rejects compilers older than 7.1. Use `-InnoCompiler <path-to-ISCC.exe>` for a p
 | `Source/VhdAttach-Service` | `VhdStudioService.exe`: attach/detach and auto-mount service. Also holds code shared with the UI (`VirtualDiskImage.cs`, `VhdxHeader.cs`, `Branding.cs`) |
 | `Source/VhdAttach-Test` | MSTest unit and integration tests |
 | `Source/VhdStudio.Vsux` | VSUX signature, companion file, password and native attach/detach engine |
+| `Source/VhdStudio.Automation` | `VhdStudio.Automation.exe`: JSON CLI and local stdio MCP tools |
 | `Research/VsuPrototype/Recovery` | Independently published `VsuRecover.exe`, sharing the production signature validator/writer |
 | `Setup` | Inno Setup script and publish script |

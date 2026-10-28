@@ -151,3 +151,20 @@ Read this when you want to know what changed in the documentation and when. Appe
   [SAFETY.md](SAFETY.md) after a refusal persisted with the main window closed: the inspection
   leak is one possible blocker, and the Explorer retry is diagnostic rather than a guaranteed
   workaround. Other Windows volume blockers still need investigation when safe detach fails.
+
+## 2026-10-28
+- Added [product/automation.md](product/automation.md) and its product-index entry for the headless
+  JSON CLI and local stdio MCP server: directory/write delegation, capacity limits, VHDX operations,
+  configuration, durable request outcomes, operator recovery, portable handoff and verification.
+- Updated [SAFETY.md](SAFETY.md) for explicit automation grants, caller-bound creation, exact-handle
+  identity checks, strict attachment-state queries, pending-log refusal and unknown-outcome guards.
+- Recorded safe-detach refusal of unexpected native device-path query errors in the Unreleased
+  [changelog](../CHANGELOG.md); such failures must never bypass volume flushing and locking.
+- Updated [README.md](../README.md), [the website](../site/index.html), [BUILD.md](../BUILD.md),
+  [PROPOSAL.md](PROPOSAL.md) and the Unreleased [changelog](../CHANGELOG.md) for the first automation
+  increment and installer inclusion. Existing visible FAQ and JSON-LD text remain identical.
+- Documented CI's native automation workflow against the matching service on a disposable hosted
+  runner in [BUILD.md](../BUILD.md); the step refuses existing services and cleans up its own.
+- Updated [product/automation.md](product/automation.md), [SAFETY.md](SAFETY.md), and the Unreleased
+  [changelog](../CHANGELOG.md) for journal reads that permit atomic replacement and normalized
+  saved-path comparisons, with regression coverage for status snapshots and 8.3 directory aliases.

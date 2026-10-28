@@ -6,8 +6,21 @@ using System.Threading;
 namespace VhdAttach {
     internal static class PipeClient {
 
+        /// <summary>Read-only handshake used before automation sends any mutation to the service.</summary>
+        public static PipeResponse AutomationCapabilities() => Send("AutomationCapabilities", new Dictionary<string, string>());
+
+        /// <summary>Creates a new VHDX as the caller, then optionally prepares only that new disk as GPT/NTFS.</summary>
+        public static PipeResponse CreateImage(string path, long sizeBytes, bool fixedSize = false, bool createSinglePartition = true) {
+            var data = new Dictionary<string, string>();
+            data.Add("Path", PathHelper.ToServicePath(path));
+            data.Add("SizeBytes", sizeBytes.ToString(CultureInfo.InvariantCulture));
+            data.Add("FixedSize", fixedSize.ToString(CultureInfo.InvariantCulture));
+            data.Add("CreateSinglePartition", createSinglePartition.ToString(CultureInfo.InvariantCulture));
+            return Send("CreateImage", data, 300000);
+        }
+
         /// <param name="avoidLetters">Letters the user uses for network or subst drives, which the service can't see.</param>
-        public static PipeResponse Attach(string path, bool mountReadOnly, bool initializeDisk, bool noDriveLetter = false, string mountFolder = null, string avoidLetters = null) {
+        public static PipeResponse Attach(string path, bool mountReadOnly, bool initializeDisk, bool noDriveLetter = false, string mountFolder = null, string avoidLetters = null, bool refuseLogReplay = false, System.Guid? expectedImageId = null) {
             var data = new Dictionary<string, string>();
             data.Add("Path", PathHelper.ToServicePath(path));
             data.Add("MountReadOnly", mountReadOnly.ToString(CultureInfo.InvariantCulture));
@@ -15,14 +28,17 @@ namespace VhdAttach {
             data.Add("NoDriveLetter", noDriveLetter.ToString(CultureInfo.InvariantCulture));
             data.Add("MountFolder", mountFolder ?? "");
             data.Add("AvoidLetters", avoidLetters ?? "");
+            data.Add("RefuseLogReplay", refuseLogReplay.ToString(CultureInfo.InvariantCulture));
+            data.Add("ExpectedImageId", expectedImageId?.ToString("D") ?? "");
             return Send("Attach", data, 30000); //log replay and mount folders can take a while
         }
 
         /// <param name="force">Detach even if files on the disk are open (unsaved data in them is lost).</param>
-        public static PipeResponse Detach(string path, bool force = false) {
+        public static PipeResponse Detach(string path, bool force = false, System.Guid? expectedImageId = null) {
             var data = new Dictionary<string, string>();
             data.Add("Path", PathHelper.ToServicePath(path));
             data.Add("Force", force.ToString(CultureInfo.InvariantCulture));
+            data.Add("ExpectedImageId", expectedImageId?.ToString("D") ?? "");
             return Send("Detach", data, 60000); //locking volumes may wait for short-lived handles
         }
 
@@ -118,8 +134,15 @@ namespace VhdAttach {
         private static PipeResponse Send(string operation, Dictionary<string, string> data, int timeout = 5000) {
             var packetOut = new Medo.Net.TinyPacket(VhdAttachCommon.Branding.PacketProduct, operation, data);
             try {
-                Pipe.Open();
-                VerifyServer();
+                try {
+                    Pipe.Open();
+                    VerifyServer();
+                } catch (System.Exception error) when (error is System.IO.IOException || error is System.ComponentModel.Win32Exception
+                    || error is System.UnauthorizedAccessException || error is System.Management.ManagementException) {
+                    // No request bytes have been sent. This is a definite connection failure,
+                    // unlike a timeout or broken pipe after Write, whose outcome is unknown.
+                    return new PipeResponse(true, "Cannot connect to the verified VHD Studio service. " + error.Message, "ServiceUnavailable");
+                }
                 Pipe.Write(packetOut.GetBytes());
                 var timer = new Stopwatch();
                 timer.Start();
@@ -131,9 +154,9 @@ namespace VhdAttach {
                 if (Pipe.HasBytesToRead) {
                     var buffer = Pipe.ReadAvailable();
                     var packetIn = Medo.Net.TinyPacket.Parse(buffer);
-                    return new PipeResponse(bool.Parse(packetIn["IsError"]), packetIn["Message"], packetIn["ErrorCode"], packetIn["DriveLetters"]);
+                    return new PipeResponse(bool.Parse(packetIn["IsError"]), packetIn["Message"], packetIn["ErrorCode"], packetIn["DriveLetters"], packetIn["AutomationProtocol"]);
                 } else {
-                    return new PipeResponse(true, "The service did not answer in time. The operation may still finish; refresh before trying again.");
+                    return new PipeResponse(true, "The service did not answer in time. The operation may still finish; refresh before trying again.", "Timeout");
                 }
             } finally {
                 Pipe.Close();

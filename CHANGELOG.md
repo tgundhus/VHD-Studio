@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### New
+- Headless JSON CLI and local stdio MCP tools for VHDX creation, inspection, attachment, safe
+  detachment and durable request status. Automation requires an explicit local directory and
+  mutation grant, defaults to read-only attachment, bounds capacity and refuses existing
+  destinations. Prepared creation uses GPT and one NTFS partition on the exact new image.
+- The Windows service creates new VHDX files using the caller's file access before privileged
+  preparation. Timeouts and interrupted requests are recorded without automatically retrying.
+
+### Fixed
+- Automation status reads allow atomic journal replacement when an operation completes. Unresolved
+  request checks normalize saved directory aliases before comparing image paths.
+- Safe detach aborts on unexpected native attachment-query errors instead of proceeding without
+  identifying and locking the disk's volumes.
+
 ## 5.2.3
 
 ### Fixed

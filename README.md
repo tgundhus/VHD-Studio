@@ -195,6 +195,14 @@ Requires Windows 10 1809 or later, or Windows 11 (x64). Works on Home, Pro and E
 
 ## Command line
 
+`VhdStudio.Automation.exe` provides a headless JSON CLI and local stdio MCP server for agents and
+scripts. It can list, inspect, create, attach and safely detach VHDX workspaces, with durable request
+status. Configure an existing local directory with `--root`; `--allow-write` explicitly delegates
+create, attach and detach, and `--max-size-bytes` bounds capacity. Creation can prepare GPT and one
+NTFS partition on the new image. The Windows service performs privileged work using the caller's
+file access. VSUX retains its interactive password flow. See the [automation guide](docs/product/automation.md)
+for CLI examples, MCP configuration and timeout recovery. Desktop shortcuts remain available:
+
 ```text
 VhdStudio.exe "disk.vhdx"                           Open a disk
 VhdStudio.exe /attach [/readonly] "disk.vhdx"       Attach (read-only)

@@ -61,6 +61,29 @@ jobs:
         shell: pwsh
         run: dotnet test Source/VhdAttach-Test/VhdAttach-Test.csproj -c Release -- --filter "TestCategory=Elevated"
 
+      - name: Test native automation with the matching service on this disposable runner
+        if: ${{ !inputs.installerOnly }}
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+            throw 'Native automation service installation is restricted to a disposable hosted runner.'
+          }
+          if (Get-Service VhdStudio,VhdAttach -ErrorAction SilentlyContinue) {
+            throw 'Refusing to replace a pre-existing service.'
+          }
+          $broker = (Resolve-Path -LiteralPath 'Publish/VhdStudio/VhdStudioService.exe').Path
+          try {
+            $install = Start-Process -FilePath $broker -ArgumentList '/Install' -Wait -PassThru -WindowStyle Hidden
+            if ($install.ExitCode -ne 0) { throw 'Automation test service installation failed.' }
+            $env:VHDSTUDIO_AUTOMATION_NATIVE_TEST = '1'
+            dotnet Source/VhdAttach-Test/bin/Release/net10.0-windows/VhdAttachTest.dll --filter 'TestCategory=AutomationNative' --results-directory Source/VhdAttach-Test/TestResults/AutomationNative --report-trx --no-progress --no-ansi
+            if ($LASTEXITCODE -ne 0) { throw 'The native automation workflow failed.' }
+          } finally {
+            Remove-Item Env:VHDSTUDIO_AUTOMATION_NATIVE_TEST -ErrorAction SilentlyContinue
+            $uninstall = Start-Process -FilePath $broker -ArgumentList '/Uninstall' -Wait -PassThru -WindowStyle Hidden
+            if ($uninstall.ExitCode -ne 0) { throw 'Automation test service cleanup failed.' }
+          }
+
       - name: Download previous release as installer upgrade fixture
         shell: pwsh
         env:

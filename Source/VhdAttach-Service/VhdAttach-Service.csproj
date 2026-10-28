@@ -16,6 +16,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\VhdAttach\NewDiskCreation.cs" Link="Shared\NewDiskCreation.cs" />
+    <Compile Include="..\VhdAttach\Storage\StorageManager.cs" Link="Shared\StorageManager.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="System.Management" Version="10.0.0" />
     <PackageReference Include="System.IO.Hashing" Version="10.0.0" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />

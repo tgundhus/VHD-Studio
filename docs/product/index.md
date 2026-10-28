@@ -11,6 +11,9 @@ generated: {at: 2026-10-10, by: agent}
 
 Read this when you want to know what VHD Studio does or is planned to do, and how.
 
+- [automation.md](automation.md): JSON CLI and local MCP tools for scoped VHDX workspaces,
+  explicit mutation delegation, durable request status and safe handoff.
+
 - [../VSUX.md](../VSUX.md): shipped experimental mount lock for unencrypted VHDX files, with
   password prompts, safe detach and standalone recovery.
 - [password-protection-design.md](password-protection-design.md): the earlier confidentiality

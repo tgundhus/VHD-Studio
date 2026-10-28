@@ -79,12 +79,20 @@ Invoke-Step 'Publish' {
         }
         Remove-Item -LiteralPath $resolved -Recurse -Force
     }
-    foreach ($project in 'VhdAttach\VhdAttach.csproj', 'VhdAttach-Service\VhdAttach-Service.csproj') {
+    foreach ($project in 'VhdAttach\VhdAttach.csproj', 'VhdAttach-Service\VhdAttach-Service.csproj', 'VhdStudio.Automation\VhdStudio.Automation.csproj') {
         dotnet publish (Join-Path $root "Source\$project") -c $Configuration -r win-x64 --self-contained $(if ($SelfContained) { 'true' } else { 'false' }) -o $publishDir --nologo
         if ($LASTEXITCODE -ne 0) { return }
     }
     # Recovery must also run on a PC without VHD Studio or a shared .NET runtime.
     dotnet publish (Join-Path $root 'Research\VsuPrototype\Recovery\VsuRecover.csproj') -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=true -o (Join-Path $publishDir 'Recovery') --nologo
+}
+
+Invoke-Step 'Check published automation runtime' {
+    foreach ($name in 'VhdStudio.Automation.exe', 'VhdStudio.Automation.dll', 'VhdStudio.Automation.deps.json', 'VhdStudio.Automation.runtimeconfig.json') {
+        if (-not (Test-Path -LiteralPath (Join-Path $publishDir $name) -PathType Leaf)) { throw "Missing automation runtime file: $name" }
+    }
+    & (Join-Path $publishDir 'VhdStudio.Automation.exe') --help | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'The published automation executable could not start.' }
 }
 
 if ($SignFile) {

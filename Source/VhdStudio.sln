@@ -10,6 +10,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VhdAttach-Test", "VhdAttach
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VhdStudio.Vsux", "VhdStudio.Vsux\VhdStudio.Vsux.csproj", "{3FC91999-50F9-46DA-BEA6-3D6DB084316D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VhdStudio.Automation", "VhdStudio.Automation\VhdStudio.Automation.csproj", "{4FC493F6-C468-4B4D-8204-1E76851F0044}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -42,6 +44,12 @@ Global
 		{3FC91999-50F9-46DA-BEA6-3D6DB084316D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3FC91999-50F9-46DA-BEA6-3D6DB084316D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{3FC91999-50F9-46DA-BEA6-3D6DB084316D}.Release|x86.ActiveCfg = Release|Any CPU
+		{4FC493F6-C468-4B4D-8204-1E76851F0044}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4FC493F6-C468-4B4D-8204-1E76851F0044}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4FC493F6-C468-4B4D-8204-1E76851F0044}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4FC493F6-C468-4B4D-8204-1E76851F0044}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4FC493F6-C468-4B4D-8204-1E76851F0044}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4FC493F6-C468-4B4D-8204-1E76851F0044}.Release|x86.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

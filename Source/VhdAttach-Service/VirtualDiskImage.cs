@@ -39,6 +39,8 @@ namespace VhdAttachCommon {
         public bool? Is4KAligned { get; set; }
         public bool? IsLoaded { get; set; }
         public string AttachedPath { get; set; }
+        /// <summary>Native attachment query result, captured with this snapshot (55 means detached).</summary>
+        public int AttachedPathError { get; set; }
         public bool? ParentResolved { get; set; }
         public IList<string> ParentLocations { get; } = new List<string>();
         public Guid? ParentIdentifier { get; set; }
@@ -143,7 +145,8 @@ namespace VhdAttachCommon {
                     if (buffer != null) { details.ParentIdentifier = ReadGuid(buffer, 8); }
                 }
 
-                details.AttachedPath = GetAttachedPath(handle);
+                details.AttachedPath = GetAttachedPath(handle, out var attachmentError);
+                details.AttachedPathError = attachmentError;
             }
 
             return details;
@@ -620,10 +623,15 @@ namespace VhdAttachCommon {
         }
 
         private static string GetAttachedPath(SafeFileHandle handle) {
+            return GetAttachedPath(handle, out _);
+        }
+
+        private static string GetAttachedPath(SafeFileHandle handle, out int error) {
             var size = 1024;
             var path = new StringBuilder(size / 2);
             var res = NativeMethods.GetVirtualDiskPhysicalPath(handle, ref size, path);
             LastPhysicalPathError = res;
+            error = res;
             return (res == NativeMethods.ERROR_SUCCESS) ? path.ToString() : null;
         }
 
